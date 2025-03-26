@@ -471,92 +471,124 @@
     </div>
 
     <script>
-        // DOM Elementleri
-        const lobbyContainer = document.getElementById('lobby-container');
-        const gameContainer = document.getElementById('game-container');
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const roomList = document.getElementById('room-list');
-        const createRoomBtn = document.getElementById('create-room');
-        const createRoomPanel = document.getElementById('create-room-panel');
-        const createRoomSubmit = document.getElementById('create-room-submit');
-        const createRoomCancel = document.getElementById('create-room-cancel');
-        const refreshRoomsBtn = document.getElementById('refresh-rooms');
-        const leaveRoomBtn = document.getElementById('leave-room');
-        const statusText = document.getElementById('status-text');
-        const playersContainer = document.getElementById('players');
-        const statusMessage = document.getElementById('status-message');
-        const usernameInput = document.getElementById('username');
-        const colorSelector = document.getElementById('color-selector');
-        
-        // Canvas boyutlandırma
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        // Oyun değişkenleri
-        let socket;
-        let clientId;
-        let currentRoomId;
-        let players = {};
-        let footprints = [];
-        let obstacles = [];
-        let isEbe = false;
-        let myColor = 'blue';
-        let mouseX = 0;
-        let mouseY = 0;
-        let lastTime = 0;
-        let isFreezed = false;  // Donmuş durumda mı?
+ // DOM Elementleri
+const lobbyContainer = document.getElementById('lobby-container');
+const gameContainer = document.getElementById('game-container');
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const roomList = document.getElementById('room-list');
+const createRoomBtn = document.getElementById('create-room');
+const createRoomPanel = document.getElementById('create-room-panel');
+const createRoomSubmit = document.getElementById('create-room-submit');
+const createRoomCancel = document.getElementById('create-room-cancel');
+const refreshRoomsBtn = document.getElementById('refresh-rooms');
+const leaveRoomBtn = document.getElementById('leave-room');
+const statusText = document.getElementById('status-text');
+const playersContainer = document.getElementById('players');
+const statusMessage = document.getElementById('status-message');
+const usernameInput = document.getElementById('username');
+const colorSelector = document.getElementById('color-selector');
 
-        // Oyuncu nesnesi
-        const myPlayer = {
-            x: 0,
-            y: 0,
-            angle: 0,
-            size: 20,
-            speed: 4,
-            isRunning: false,
-            lastFootprintPos: { x: 0, y: 0 },
-            footprintDistance: 0
-        };
+// Canvas boyutlandırma
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-        // Sabitler
-        const PLAYER_SIZE = 15;
-        const VIEW_ANGLE = 60;
-        const VIEW_DISTANCE = 200;
-        const FOOTPRINT_DETECTION_DISTANCE = 150;
-        const FOOTPRINT_DURATION = 1000;
-        const FOOTPRINT_INTERVAL = 30;
-        const CATCH_DISTANCE = 40;
-        
-        // Klavye kontrolleri
-        const keys = {
-            w: false,
-            a: false,
-            s: false,
-            d: false,
-            shift: false
-        };
-        
-        // Renk seçici
-        const colorOptions = colorSelector.querySelectorAll('.color-option');
-        colorOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                colorOptions.forEach(opt => opt.classList.remove('selected'));
-                option.classList.add('selected');
-                myColor = option.getAttribute('data-color');
-            });
-        });
-        
-        // WebSocket Bağlantısı
-        // WebSocket Bağlantısı
+// Oyun değişkenleri
+let socket;
+let clientId;
+let currentRoomId;
+let players = {};
+let footprints = [];
+let obstacles = [];
+let isEbe = false;
+let myColor = 'blue';
+let mouseX = 0;
+let mouseY = 0;
+let lastTime = 0;
+let isFreezed = false;  // Donmuş durumda mı?
 
+// Labirent değişkenleri
+let maze = []; // Labirent haritası
+let hidingSpots = []; // Gizlenme noktaları
+let playerIsHiding = false; // Oyuncu gizleniyor mu?
+let playerHidingAlpha = 1.0; // Oyuncu gizlendiğinde şeffaflık değeri
 
-// Kan animasyonu değişkenleri
-let bloodCanvas;
-let bloodCtx;
-let bloodOverlay;
-let countdownNumber;
-let countdownSplash;
+// Kan Efekti Değişkenleri
+let bloodCanvas = null;
+let bloodCtx = null;
+let bloodOverlay = null;
+let countdownNumber = null;
+let countdownSplash = null;
+let isBloodInitialized = false;
+
+// UI Elementleri
+let dashUI = null; // Dash sayacı göstergesi
+let staminaBar = null; // Stamina barı göstergesi
+
+// Oyuncu nesnesi
+const myPlayer = {
+    x: 0,
+    y: 0,
+    angle: 0,
+    size: 20,
+    speed: 4,
+    isRunning: false,
+    lastFootprintPos: { x: 0, y: 0 },
+    footprintDistance: 0,
+    dashCount: 3, // Ebe için dash hakkı sayısı
+    lastDashTime: 0, // Son dash yapılan zaman
+    lastDashRechargeTime: 0, // Son dash hakkı yenilenme zamanı
+    stamina: 100, // Oyuncunun staminası (%)
+    isStaminaEmpty: false // Stamina tamamen bitti mi?
+};
+
+// Sabitler
+const PLAYER_SIZE = 15;
+const VIEW_ANGLE = 60;
+const VIEW_DISTANCE = 200;
+const FOOTPRINT_DETECTION_DISTANCE = 150;
+const FOOTPRINT_DURATION = 1000;
+const FOOTPRINT_INTERVAL = 30;
+const CATCH_DISTANCE = 40;
+
+// Dash ve stamina sabitleri
+const DASH_COOLDOWN = 5000; // 5 saniye dash bekleme süresi
+const DASH_RECHARGE_TIME = 60000; // 1 dakika (60 sn) dash hakkı yenilenme süresi
+const MAX_DASH_COUNT = 3; // Maksimum dash hakkı
+const DASH_POWER = 150; // Dash hareketi gücü
+const DASH_DURATION = 200; // Dash hareketi süresi (ms)
+
+const MAX_STAMINA = 100; // Maksimum stamina değeri
+const STAMINA_DEPLETION_RATE = 20; // Koşarken saniyede azalan stamina miktarı
+const STAMINA_RECHARGE_RATE = 6.67; // Durduğunda saniyede artan stamina miktarı (15 saniyede dolması için ~6.67/sn)
+const MIN_STAMINA_TO_RUN = 10; // Koşmaya başlayabilmek için gereken minimum stamina
+
+// Labirent sabitleri
+const TILE_SIZE = 40; // Labirent kare boyutu
+const WALL_COLOR = '#444'; // Duvar rengi
+const HIDING_SPOT_COLOR = '#222'; // Gizlenme yeri rengi
+const HIDING_SPOT_MARKER_COLOR = '#333'; // Gizlenme yeri işaretleyici rengi
+const HIDING_ALPHA_MIN = 0.3; // Gizlenme durumunda minimum şeffaflık
+const HIDING_VISIBILITY_REDUCTION = 0.5; // Gizlenme durumunda görünürlük azalma oranı
+
+// Klavye kontrolleri
+const keys = {
+    w: false,
+    a: false,
+    s: false,
+    d: false,
+    shift: false
+};
+
+// Renk seçici
+const colorOptions = colorSelector.querySelectorAll('.color-option');
+colorOptions.forEach(option => {
+    option.addEventListener('click', () => {
+        colorOptions.forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+        myColor = option.getAttribute('data-color');
+    });
+});
 
 // Kan pozları (parlak ve koyu kırmızı renkler)
 const bloodColors = [
@@ -569,36 +601,37 @@ const bloodColors = [
 
 // Kan elementlerini hazırla
 function initBloodElements() {
-    // HTML'i body'e ekle
-    const bloodOverlayContainer = document.createElement('div');
-    bloodOverlayContainer.innerHTML = bloodOverlayHTML;
-    document.body.appendChild(bloodOverlayContainer.firstElementChild);
-    
-    // CSS'i head'e ekle
-    const bloodStyle = document.createElement('style');
-    bloodStyle.textContent = bloodOverlayCSS;
-    document.head.appendChild(bloodStyle);
+    if (isBloodInitialized) return; // Zaten başlatılmışsa tekrar başlatma
     
     // Elementleri seç
+    bloodOverlay = document.getElementById('blood-overlay');
     bloodCanvas = document.getElementById('blood-canvas');
     bloodCtx = bloodCanvas.getContext('2d');
-    bloodOverlay = document.getElementById('blood-overlay');
     countdownNumber = document.getElementById('countdown-number');
     countdownSplash = document.getElementById('countdown-splash');
     
     // Canvas boyutlandırma
-    bloodCanvas.width = window.innerWidth;
-    bloodCanvas.height = window.innerHeight;
+    if (bloodCanvas) {
+        bloodCanvas.width = window.innerWidth;
+        bloodCanvas.height = window.innerHeight;
+    }
     
     // Pencere boyutu değiştiğinde canvas boyutunu güncelle
     window.addEventListener('resize', () => {
-        bloodCanvas.width = window.innerWidth;
-        bloodCanvas.height = window.innerHeight;
+        if (bloodCanvas) {
+            bloodCanvas.width = window.innerWidth;
+            bloodCanvas.height = window.innerHeight;
+        }
     });
+    
+    isBloodInitialized = true;
+    console.log("Kan efektleri başlatıldı");
 }
 
 // Kan damlası, kan lekesi ve pıhtı oluşturma
 function createBloodElements() {
+    if (!bloodOverlay) return;
+    
     // Kan damlaları oluştur
     for (let i = 0; i < 15; i++) {
         createBloodDrop();
@@ -617,6 +650,8 @@ function createBloodElements() {
 
 // Kan damlası oluştur
 function createBloodDrop() {
+    if (!bloodOverlay) return;
+    
     const drop = document.createElement('div');
     drop.className = 'blood-drop';
     
@@ -639,9 +674,11 @@ function createBloodDrop() {
     
     // Animasyon bitince sil
     drop.addEventListener('animationend', () => {
-        drop.remove();
-        // Yeni damla oluştur
-        if (bloodOverlay.style.display !== 'none') {
+        if (drop.parentNode) {
+            drop.remove();
+        }
+        // Yeni damla oluştur (ama sadece overlay görünürse)
+        if (bloodOverlay && bloodOverlay.style.display !== 'none') {
             createBloodDrop();
         }
     });
@@ -649,6 +686,8 @@ function createBloodDrop() {
 
 // Kan lekesi oluştur
 function createBloodStain() {
+    if (!bloodOverlay) return;
+    
     const stain = document.createElement('div');
     stain.className = 'blood-stain';
     
@@ -678,6 +717,8 @@ function createBloodStain() {
 
 // Kan pıhtısı oluştur
 function createBloodClot() {
+    if (!bloodOverlay) return;
+    
     const clot = document.createElement('div');
     clot.className = 'blood-clot';
     
@@ -707,6 +748,8 @@ function createBloodClot() {
 
 // Canvas üzerinde kan sıçraması çiz
 function drawBloodSplash() {
+    if (!bloodCtx || !bloodCanvas) return;
+    
     bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
     
     // Rastgele kan sıçramaları
@@ -744,6 +787,8 @@ function drawBloodSplash() {
 
 // Sayıyı görüntüle ve animasyonu başlat
 function showNumber(number) {
+    if (!countdownNumber) return;
+    
     countdownNumber.textContent = number;
     countdownNumber.style.opacity = '0';
     countdownNumber.style.animation = 'none';
@@ -764,13 +809,22 @@ function showNumber(number) {
         drawBloodSplash();
         
         // Kan sıçrama animasyonu
-        countdownSplash.style.opacity = '0.7';
-        countdownSplash.style.animation = 'splash 1s';
+        if (countdownSplash) {
+            countdownSplash.style.opacity = '0.7';
+            countdownSplash.style.animation = 'splash 1s';
+        }
     }, 100);
 }
 
 // Kanlı geri sayım animasyonu
 function startBloodCountdown(totalSeconds, onComplete) {
+    // İlk çağrıldığında kan elementlerini hazırla
+    if (!isBloodInitialized) {
+        initBloodElements();
+    }
+    
+    if (!bloodOverlay) return;
+    
     // Overlay'i görünür yap
     bloodOverlay.style.display = 'flex';
     
@@ -787,8 +841,10 @@ function startBloodCountdown(totalSeconds, onComplete) {
         
         if (currentSecond > 0) {
             // Kaybolma animasyonu
-            countdownNumber.style.opacity = '0';
-            countdownNumber.style.transform = 'scale(1.5)';
+            if (countdownNumber) {
+                countdownNumber.style.opacity = '0';
+                countdownNumber.style.transform = 'scale(1.5)';
+            }
             
             // Kısa bir gecikme sonrası yeni sayıyı göster
             setTimeout(() => {
@@ -799,19 +855,31 @@ function startBloodCountdown(totalSeconds, onComplete) {
             clearInterval(countdownInterval);
             
             // Son sayı kaybolsun
-            countdownNumber.style.opacity = '0';
-            countdownNumber.style.transform = 'scale(1.5)';
+            if (countdownNumber) {
+                countdownNumber.style.opacity = '0';
+                countdownNumber.style.transform = 'scale(1.5)';
+            }
             
             // Geri sayım bittiğinde overlay'i kapat
             setTimeout(() => {
-                bloodOverlay.style.display = 'none';
+                if (bloodOverlay) {
+                    bloodOverlay.style.display = 'none';
+                }
                 
                 // Kan elementlerini temizle
-                const bloodElements = bloodOverlay.querySelectorAll('.blood-drop, .blood-stain, .blood-clot');
-                bloodElements.forEach(element => element.remove());
+                if (bloodOverlay) {
+                    const bloodElements = bloodOverlay.querySelectorAll('.blood-drop, .blood-stain, .blood-clot');
+                    bloodElements.forEach(element => {
+                        if (element.parentNode) {
+                            element.remove();
+                        }
+                    });
+                }
                 
                 // Canvas temizle
-                bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
+                if (bloodCtx && bloodCanvas) {
+                    bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
+                }
                 
                 // Tamamlandı callback
                 if (onComplete) onComplete();
@@ -820,69 +888,19 @@ function startBloodCountdown(totalSeconds, onComplete) {
     }, 1000);
 }
 
-
-// Mevcut startEbeCountdown fonksiyonunu değiştirin
+// Ebe geri sayım fonksiyonu
 function startEbeCountdown() {
-    const bloodOverlay = document.getElementById('blood-overlay');
-    const countdownNumber = document.getElementById('countdown-number');
-    const bloodCanvas = document.getElementById('blood-canvas');
+    // Kanlı geri sayımı başlat
+    startBloodCountdown(3, () => {
+        // Donmuş durumdan çık
+        isFreezed = false;
+    });
     
     // Donmuş duruma geç
     isFreezed = true;
-    
-    // Overlay'i görünür yap
-    bloodOverlay.style.display = 'flex';
-    
-    // Canvas boyutlarını ayarla
-    bloodCanvas.width = window.innerWidth;
-    bloodCanvas.height = window.innerHeight;
-    
-    // Kan elementleri oluştur
-    createBloodElements();
-    
-    // İlk sayıyı göster
-    let currentSecond = 3;
-    showBloodNumber(currentSecond);
-    
-    // Geri sayım intervali
-    const countdownInterval = setInterval(() => {
-        currentSecond--;
-        
-        if (currentSecond > 0) {
-            // Kaybolma animasyonu
-            countdownNumber.style.opacity = '0';
-            countdownNumber.style.transform = 'scale(1.5)';
-            
-            // Kısa bir gecikme sonrası yeni sayıyı göster
-            setTimeout(() => {
-                showBloodNumber(currentSecond);
-            }, 500);
-        } else {
-            // Geri sayım bitti
-            clearInterval(countdownInterval);
-            
-            // Son sayı kaybolsun
-            countdownNumber.style.opacity = '0';
-            countdownNumber.style.transform = 'scale(1.5)';
-            
-            // Geri sayım bittiğinde overlay'i kapat
-            setTimeout(() => {
-                bloodOverlay.style.display = 'none';
-                
-                // Donmuş durumdan çık
-                isFreezed = false;
-                
-                // Kan elementlerini temizle
-                const bloodElements = bloodOverlay.querySelectorAll('.blood-drop, .blood-stain, .blood-clot');
-                bloodElements.forEach(element => element.remove());
-                
-                // Canvas temizle
-                const bloodCtx = bloodCanvas.getContext('2d');
-                bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
-            }, 1000);
-        }
-    }, 1000);
 }
+
+// WebSocket Bağlantısı
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
@@ -941,6 +959,44 @@ function connectWebSocket() {
                 case 'player_left':
                     // Oyuncuyu kaldır
                     if (players[message.clientId]) {
+                        console.log(`Oyuncu ayrıldı: ${players[message.clientId].username}`);
+                        
+                        // Özel bir mesaj göster
+                        showStatusMessage(`${players[message.clientId].username} oyundan ayrıldı!`);
+                        
+                        // Ebe ayrıldıysa ve yeni ebe bilgisi henüz gelmediyse
+                        if (players[message.clientId].isEbe && message.newEbeId) {
+                            // Yeni ebe bilgisi varsa güncelle
+                            Object.keys(players).forEach(id => {
+                                players[id].isEbe = (id === message.newEbeId);
+                            });
+                            
+                            // Ben yeni ebe oldum mu?
+                            isEbe = (message.newEbeId === clientId);
+                            
+                            // Durum bilgisini güncelle
+                            updateStatus();
+                            updatePlayerList();
+                            
+                            // Yeni ebe ben olduysam bildirim göster
+                            if (isEbe) {
+                                showStatusMessage("Ebe ayrıldı! Yeni ebe sensin!", 5000);
+                                
+                                // Kanlı geri sayımı başlat
+                                startBloodCountdown(3, () => {
+                                    isFreezed = false;
+                                });
+                                
+                                // Oyuncuyu dondur
+                                isFreezed = true;
+                            } else if (message.newEbeId) {
+                                // Başka birisi ebe olduysa bildirim göster
+                                const newEbeName = players[message.newEbeId] ? players[message.newEbeId].username : 'Başka bir oyuncu';
+                                showStatusMessage(`Ebe ayrıldı! Yeni ebe: ${newEbeName}`);
+                            }
+                        }
+                        
+                        // Oyuncuyu players listesinden sil
                         delete players[message.clientId];
                         updatePlayerList();
                     }
@@ -961,37 +1017,76 @@ function connectWebSocket() {
                     footprints.push(message.footprint);
                     break;
                     
-                // case 'new_ebe' kısmını şu şekilde değiştirin:
                 case 'new_ebe':
                     // Ebe değişimi
-                const wasEbe = isEbe; // Daha önce ebe miydim?
-                isEbe = (message.ebeId === clientId);
-
-                // Oyuncu durumlarını güncelle
-                Object.keys(players).forEach(id => {
-                    players[id].isEbe = (id === message.ebeId);
-                });
-
-                updatePlayerList();
-                updateStatus();
-
-                // Ebe değişim mesajı
-                if (message.ebeId === clientId && !wasEbe) {
-                    // Kanlı geri sayım animasyonu başlat
-                    startBloodCountdown(3, () => {
-                        isFreezed = false;
+                    const wasEbe = isEbe; // Daha önce ebe miydim?
+                    isEbe = (message.ebeId === clientId);
+                    
+                    console.log(`Yeni ebe: ${message.ebeId}, ben: ${clientId}, ebe miyim: ${isEbe}`);
+                    
+                    // Oyuncu durumlarını güncelle
+                    let ebeExists = false;
+                    Object.keys(players).forEach(id => {
+                        const isPlayerEbe = (id === message.ebeId);
+                        players[id].isEbe = isPlayerEbe;
+                        if (isPlayerEbe) ebeExists = true;
                     });
-
-                    showStatusMessage('Şimdi EBE sensin!');
-                } else if (message.ebeId !== clientId) {
-                    const newEbeName = players[message.ebeId] ? players[message.ebeId].username : 'Başka bir oyuncu';
-                    showStatusMessage(`${newEbeName} ebe oldu!`);
-                }
-                break;
+                    
+                    // Eğer oyuncular arasında ebe yoksa ve ben ebe değilsem
+                    // (ebe oyundan çıkmış ve yeni ebe mesajı gelmiş olabilir)
+                    if (!ebeExists && !isEbe) {
+                        console.log("Dikkat: Oyuncular arasında ebe yok!");
+                        // Sunucudan yeni bir ebe ataması istenebilir
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: 'request_new_ebe',
+                                roomId: currentRoomId
+                            }));
+                        }
+                    }
+                    
+                    updatePlayerList();
+                    updateStatus();
+                    
+                    // Ebe değişim mesajı
+                    if (message.ebeId === clientId && !wasEbe) {
+                        // Kanlı geri sayım başlat
+                        startBloodCountdown(3, () => {
+                            isFreezed = false;
+                        });
+                        
+                        // Oyuncuyu dondur
+                        isFreezed = true;
+                        
+                        showStatusMessage('Şimdi EBE sensin!');
+                    } else if (message.ebeId !== clientId) {
+                        const newEbeName = players[message.ebeId] ? players[message.ebeId].username : 'Başka bir oyuncu';
+                        showStatusMessage(`${newEbeName} ebe oldu!`);
+                    }
+                    break;
                     
                 case 'game_started':
                     // Oyun başladı
                     startGame();
+                    break;
+                    
+                case 'room_status':
+                    // Odadaki oyuncuların güncel durumu
+                    console.log("Oda durumu güncellendi:", message.players);
+                    
+                    // Oyuncuları güncelle
+                    players = {};
+                    message.players.forEach(player => {
+                        if (player.id !== clientId) {
+                            players[player.id] = player;
+                        }
+                    });
+                    
+                    // Ebe kontrolü
+                    isEbe = (message.ebeId === clientId);
+                    
+                    updatePlayerList();
+                    updateStatus();
                     break;
                     
                 case 'error':
@@ -1013,612 +1108,723 @@ function connectWebSocket() {
         console.error('WebSocket hatası:', error);
     };
 }
-        
-        // Yeni geri sayım sistemi
-        function startEbeCountdown() {
-            // Aktif bir zamanlayıcı varsa önce onu temizle
-            if (countdownTimer) {
-                clearInterval(countdownTimer);
-                countdownTimer = null;
-            }
-            
-            // DOM elementleri kontrol et
-            if (!countdownContainer || !countdownNumber) {
-                console.error("Geri sayım elementleri bulunamadı!");
-                return;
-            }
-            
-            // Donmuş duruma geç
-            isFreezed = true;
-            
-            // Başlangıç değeri
-            let currentSecond = 3;
-            countdownNumber.textContent = currentSecond;
-            countdownNumber.style.color = "red";
-            
-            // Geri sayım panelini göster
-            countdownContainer.style.display = "block";
-            
-            // Zamanlayıcıyı başlat
-            countdownTimer = setInterval(() => {
-                currentSecond--;
-                
-                // Renk değişimi
-                if (currentSecond === 2) {
-                    countdownNumber.style.color = "orange";
-                } else if (currentSecond === 1) {
-                    countdownNumber.style.color = "green";
-                }
-                
-                // Sayıyı güncelle
-                countdownNumber.textContent = currentSecond;
-                
-                // Geri sayım bitti mi?
-                if (currentSecond <= 0) {
-                    // Zamanlayıcıyı durdur
-                    clearInterval(countdownTimer);
-                    countdownTimer = null;
-                    
-                    // Paneli gizle
-                    countdownContainer.style.display = "none";
-                    
-                    // Donmuş durumdan çık
-                    isFreezed = false;
-                }
-            }, 1000);
-        }
-        
-        // Geri sayım ekranını güncelle
-        function updateCountdownDisplay(show, secondsLeft = 0) {
-            // DOM elementi yoksa hata oluşmasını önle
-            if (!countdownElement) {
-                console.warn("Sayaç elementi bulunamadı!");
-                return;
-            }
-            
-            if (show) {
-                countdownElement.textContent = secondsLeft;
-                countdownElement.style.display = 'block';
-                countdownElement.className = 'show';
-                
-                // Büyüklük değişimi etkisi
-                const scale = secondsLeft > 2 ? 1 : (secondsLeft > 1 ? 1.3 : 1.6);
-                countdownElement.style.transform = `translate(-50%, -50%) scale(${scale})`;
-                
-                // Renk değişimi etkisi
-                const colors = ['red', 'orange', 'green'];
-                countdownElement.style.color = colors[3 - secondsLeft];
-                
-                // Arka plan efekti
-                if (gameContainer) {
-                    gameContainer.style.boxShadow = `inset 0 0 ${50 * (4 - secondsLeft)}px ${colors[3 - secondsLeft]}`;
-                }
-            } else {
-                if (countdownElement.className) {
-                    countdownElement.className = 'hide';
-                    setTimeout(() => {
-                        countdownElement.style.display = 'none';
-                        if (gameContainer) {
-                            gameContainer.style.boxShadow = 'none';
-                        }
-                    }, 500);
-                }
-            }
-        }
 
-        // Oda listesini güncelle
-        function updateRoomList(rooms) {
-            if (rooms.length === 0) {
-                roomList.innerHTML = '<div class="room-item">Hiç oda yok. Yeni bir oda oluşturun!</div>';
-                return;
-            }
-            
-            roomList.innerHTML = '';
-            rooms.forEach(room => {
-                const roomItem = document.createElement('div');
-                roomItem.className = 'room-item';
-                roomItem.innerHTML = `
-                    <strong>${room.name}</strong>
-                    <div>Oyuncular: ${room.playerCount}</div>
-                    <div>Durum: ${room.gameStarted ? 'Oyun başladı' : 'Bekliyor'}</div>
-                `;
-                
-                roomItem.addEventListener('click', () => {
-                    joinRoom(room.id);
+// Oda listesini güncelle
+function updateRoomList(rooms) {
+    if (rooms.length === 0) {
+        roomList.innerHTML = '<div class="room-item">Hiç oda yok. Yeni bir oda oluşturun!</div>';
+        return;
+    }
+    
+    roomList.innerHTML = '';
+    rooms.forEach(room => {
+        const roomItem = document.createElement('div');
+        roomItem.className = 'room-item';
+        roomItem.innerHTML = `
+            <strong>${room.name}</strong>
+            <div>Oyuncular: ${room.playerCount}</div>
+            <div>Durum: ${room.gameStarted ? 'Oyun başladı' : 'Bekliyor'}</div>
+        `;
+        
+        roomItem.addEventListener('click', () => {
+            joinRoom(room.id);
+        });
+        
+        roomList.appendChild(roomItem);
+    });
+}
+
+// Oyuncu listesini güncelle
+function updatePlayerList() {
+    playersContainer.innerHTML = '';
+    
+    // Kendimi ekle
+    const myItem = document.createElement('div');
+    myItem.className = `player-item ${isEbe ? 'ebe' : ''}`;
+    myItem.innerHTML = `<strong>${usernameInput.value || 'Ben'}</strong> ${isEbe ? '(EBE)' : ''}`;
+    playersContainer.appendChild(myItem);
+    
+    // Diğer oyuncuları ekle
+    Object.values(players).forEach(player => {
+        const playerItem = document.createElement('div');
+        playerItem.className = `player-item ${player.isEbe ? 'ebe' : ''}`;
+        playerItem.innerHTML = `<strong>${player.username}</strong> ${player.isEbe ? '(EBE)' : ''}`;
+        playersContainer.appendChild(playerItem);
+    });
+}
+
+// Durumu güncelle
+function updateStatus() {
+    statusText.textContent = isEbe ? 'EBE' : 'Oyuncu';
+    statusText.style.color = isEbe ? 'red' : 'white';
+}
+
+// Durum mesajı göster
+function showStatusMessage(text, duration = 3000) {
+    if (!statusMessage) {
+        console.warn("Durum mesajı elementi bulunamadı!");
+        return;
+    }
+    
+    statusMessage.textContent = text;
+    statusMessage.style.display = 'block';
+    
+    setTimeout(() => {
+        if (statusMessage) {
+            statusMessage.style.display = 'none';
+        }
+    }, duration);
+}
+
+// Odaları güncelle
+function refreshRooms() {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'list_rooms'
+        }));
+    }
+}
+
+// Oda oluştur
+function createRoom() {
+    if (!usernameInput.value.trim()) {
+        alert('Lütfen bir kullanıcı adı girin!');
+        return;
+    }
+    
+    const roomName = document.getElementById('room-name').value.trim() || `${usernameInput.value}'in Odası`;
+    
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'create_room',
+            roomName: roomName
+        }));
+    }
+    
+    createRoomPanel.style.display = 'none';
+}
+
+// Odaya katıl
+function joinRoom(roomId) {
+    if (!usernameInput.value.trim()) {
+        alert('Lütfen bir kullanıcı adı girin!');
+        return;
+    }
+    
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'join_room',
+            roomId: roomId,
+            username: usernameInput.value,
+            color: myColor
+        }));
+    }
+}
+
+// Odadan ayrıl
+function leaveRoom() {
+    showLobby();
+    currentRoomId = null;
+    players = {};
+    footprints = [];
+    
+    // Oyunu durdur
+    cancelAnimationFrame(gameLoop);
+}
+
+// Lobi ekranını göster
+function showLobby() {
+    lobbyContainer.style.display = 'flex';
+    gameContainer.style.display = 'none';
+    refreshRooms();
+}
+
+// Oyun başlatma
+function startGame() {
+    lobbyContainer.style.display = 'none';
+    gameContainer.style.display = 'block';
+    
+    // Labirenti oluştur ve ayarla
+    setupMaze();
+    
+    // Durum göstergesini güncelle
+    updateStatus();
+    
+    // Donma durumunu sıfırla
+    isFreezed = false;
+    
+    // Ebe mesajı
+    if (isEbe) {
+        showStatusMessage('Sen EBEsin! Diğer oyuncuları yakala!');
+    } else {
+        showStatusMessage('Ebeden kaç ve gizlenme yerlerini kullan!');
+    }
+    
+    // Oyun döngüsünü başlat
+    requestAnimationFrame(gameLoop);
+}
+
+// Labirent veri yapısını oluştur (1: duvar, 0: boş alan, 2: gizlenme yeri)
+function createMaze() {
+    // Örnek labirent tasarımı - istediğiniz şekilde özelleştirebilirsiniz
+    return [
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+        [1, 0, 1, 2, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1, 0, 1],
+        [1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 1, 0, 1, 2, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+        [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+        [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ];
+}
+
+// Gizlenme yerlerini bul
+function findHidingSpots() {
+    const spots = [];
+    
+    for (let y = 0; y < maze.length; y++) {
+        for (let x = 0; x < maze[y].length; x++) {
+            if (maze[y][x] === 2) { // Gizlenme yeri
+                spots.push({
+                    x: x * TILE_SIZE + TILE_SIZE / 2,
+                    y: y * TILE_SIZE + TILE_SIZE / 2,
+                    width: TILE_SIZE,
+                    height: TILE_SIZE,
+                    color: HIDING_SPOT_COLOR
                 });
-                
-                roomList.appendChild(roomItem);
-            });
-        }
-        
-        // Oyuncu listesini güncelle
-        function updatePlayerList() {
-            playersContainer.innerHTML = '';
-            
-            // Kendimi ekle
-            const myItem = document.createElement('div');
-            myItem.className = `player-item ${isEbe ? 'ebe' : ''}`;
-            myItem.innerHTML = `<strong>${usernameInput.value || 'Ben'}</strong> ${isEbe ? '(EBE)' : ''}`;
-            playersContainer.appendChild(myItem);
-            
-            // Diğer oyuncuları ekle
-            Object.values(players).forEach(player => {
-                const playerItem = document.createElement('div');
-                playerItem.className = `player-item ${player.isEbe ? 'ebe' : ''}`;
-                playerItem.innerHTML = `<strong>${player.username}</strong> ${player.isEbe ? '(EBE)' : ''}`;
-                playersContainer.appendChild(playerItem);
-            });
-        }
-        
-        // Durumu güncelle
-        function updateStatus() {
-            statusText.textContent = isEbe ? 'EBE' : 'Oyuncu';
-            statusText.style.color = isEbe ? 'red' : 'white';
-        }
-        
-        // Durum mesajı göster
-        function showStatusMessage(text, duration = 3000) {
-            if (!statusMessage) {
-                console.warn("Durum mesajı elementi bulunamadı!");
-                return;
             }
-            
-            statusMessage.textContent = text;
-            statusMessage.style.display = 'block';
-            
-            setTimeout(() => {
-                if (statusMessage) {
-                    statusMessage.style.display = 'none';
-                }
-            }, duration);
         }
+    }
+    
+    return spots;
+}
 
-        // Oda listesini güncelle
+// Labirenti oluştur ve ayarla
+function setupMaze() {
+    maze = createMaze();
+    hidingSpots = findHidingSpots();
+    
+    // Oyun alanını labirent boyutuna göre ayarla
+    const mazeWidth = maze[0].length * TILE_SIZE;
+    const mazeHeight = maze.length * TILE_SIZE;
+    
+    // Canvas boyutunu labirent boyutuna göre ayarla
+    canvas.width = mazeWidth;
+    canvas.height = mazeHeight;
+    
+    // Oyuncuların başlangıç pozisyonunu labirentin ortasında bir boş alana ayarla
+    const centerX = Math.floor(maze[0].length / 2);
+    const centerY = Math.floor(maze.length / 2);
+    
+    // Güvenli bir başlangıç noktası bul
+    let startX = centerX;
+    let startY = centerY;
+    
+    // Eğer merkez bir duvarsa, yakınında boş bir yer bul
+    if (maze[startY][startX] !== 0) {
+        for (let y = 0; y < maze.length; y++) {
+            for (let x = 0; x < maze[y].length; x++) {
+                if (maze[y][x] === 0) {
+                    startX = x;
+                    startY = y;
+                    break;
+                }
+            }
+            if (maze[startY][startX] === 0) break;
+        }
+    }
+    
+    // Oyuncuyu ve diğer oyuncuları başlangıç noktasına yerleştir
+    myPlayer.x = startX * TILE_SIZE + TILE_SIZE / 2;
+    myPlayer.y = startY * TILE_SIZE + TILE_SIZE / 2;
+    
+    console.log("Labirent ayarlandı, başlangıç noktası:", startX, startY);
+}
+
+// Oyuncunun duvarlarla çarpışma kontrolü
+function checkWallCollision(x, y) {
+    // Oyuncunun bulunduğu karenin koordinatlarını hesapla
+    const tileX = Math.floor(x / TILE_SIZE);
+    const tileY = Math.floor(y / TILE_SIZE);
+    
+    // Sınır kontrolü
+    if (tileX < 0 || tileX >= maze[0].length || tileY < 0 || tileY >= maze.length) {
+        return true; // Labirent dışında
+    }
+    
+    // Duvar kontrolü
+    return maze[tileY][tileX] === 1;
+}
+
+// Oyuncunun gizlenme yerinde olup olmadığı kontrolü
+function checkHidingSpot(x, y) {
+    // Oyuncunun bulunduğu karenin koordinatlarını hesapla
+    const tileX = Math.floor(x / TILE_SIZE);
+    const tileY = Math.floor(y / TILE_SIZE);
+    
+    // Sınır kontrolü
+    if (tileX < 0 || tileX >= maze[0].length || tileY < 0 || tileY >= maze.length) {
+        return false; // Labirent dışında
+    }
+    
+    // Gizlenme yeri kontrolü
+    return maze[tileY][tileX] === 2;
+}
+
+// Duvar arkasında mı kontrol et (ışın izleme)
+function isWallBetween(x1, y1, x2, y2) {
+    // İki nokta arasında ışın izleme ile duvar kontrolü
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Adım sayısı (çözünürlük)
+    const steps = Math.ceil(distance / 5);
+    const stepX = dx / steps;
+    const stepY = dy / steps;
+    
+    // Işın boyunca adım adım ilerle
+    for (let i = 1; i < steps; i++) {
+        const x = x1 + stepX * i;
+        const y = y1 + stepY * i;
         
-        // Odaları güncelle
-        function refreshRooms() {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'list_rooms'
-                }));
+        // Bu noktada duvar var mı kontrol et
+        if (checkWallCollision(x, y)) {
+            return true; // Duvar var
+        }
+    }
+    
+    return false; // Duvar yok
+}
+
+// Labirent çizimi
+function drawMaze() {
+    for (let y = 0; y < maze.length; y++) {
+        for (let x = 0; x < maze[y].length; x++) {
+            if (maze[y][x] === 1) { // Duvar
+                ctx.fillStyle = WALL_COLOR;
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+            else if (maze[y][x] === 2) { // Gizlenme yeri
+                ctx.fillStyle = HIDING_SPOT_COLOR;
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                
+                // Gizlenme yeri işaretleyici
+                ctx.fillStyle = HIDING_SPOT_MARKER_COLOR;
+                ctx.beginPath();
+                ctx.arc(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 5, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
+    }
+}
+
+// Kamera takibini etkinleştir
+function setupCamera() {
+    // Daha önce oluşturulmuş bir kamera objesi
+    const camera = {
+        x: 0,
+        y: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        follow: function(target) {
+            // Hedefi takip et ama ekranın ortasında tut
+            this.x = target.x - this.width / 2;
+            this.y = target.y - this.height / 2;
+            
+            // Kamera sınırlarını kontrol et
+            this.x = Math.max(0, Math.min(this.x, canvas.width - this.width));
+            this.y = Math.max(0, Math.min(this.y, canvas.height - this.height));
+        },
+        apply: function() {
+            // Çizim işlemleri öncesinde kamera transformasyonunu uygula
+            ctx.save();
+            ctx.translate(-this.x, -this.y);
+        },
+        restore: function() {
+            // Kamera transformasyonunu geri al
+            ctx.restore();
+        }
+    };
+    
+    return camera;
+}
+
+// Ayak izi oluştur
+function createFootprint() {
+    const footprint = {
+        x: myPlayer.x,
+        y: myPlayer.y,
+        angle: myPlayer.angle,
+        size: 6,
+        color: 'red',
+        alpha: 1.0,
+        creationTime: Date.now(),
+        maxLifetime: FOOTPRINT_DURATION,
+        isFromRunning: myPlayer.isRunning // Koşarak mı bırakıldı?
+    };
+    
+    footprints.push(footprint);
+    
+    // Sunucuya bildir
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'footprint_created',
+            footprint: footprint
+        }));
+    }
+}
+
+// Oyun döngüsü
+function gameLoop(timestamp) {
+    // Hata ayıklama için güvenlik kontrolü
+    if (!canvas) {
+        console.error("Canvas elementi bulunamadı!");
+        return;
+    }
+    
+    if (!lastTime) lastTime = timestamp;
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    try {
+        // Oyuncuyu güncelle
+        updatePlayer(deltaTime);
         
-        // Oda oluştur
-        function createRoom() {
-            if (!usernameInput.value.trim()) {
-                alert('Lütfen bir kullanıcı adı girin!');
-                return;
-            }
-            
-            const roomName = document.getElementById('room-name').value.trim() || `${usernameInput.value}'in Odası`;
-            
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'create_room',
-                    roomName: roomName
-                }));
-            }
-            
-            createRoomPanel.style.display = 'none';
+        // Ayak izlerini güncelle
+        updateFootprints();
+        
+        // Kamerayı ayarla
+        const camera = setupCamera();
+        camera.follow(myPlayer);
+        
+        // Yakalama kontrolü
+        if (isEbe && !isFreezed) {
+            checkCatchPlayers();
         }
         
-        // Odaya katıl
-        function joinRoom(roomId) {
-            if (!usernameInput.value.trim()) {
-                alert('Lütfen bir kullanıcı adı girin!');
-                return;
-            }
+        // Siyah ekran çiz (her şey görünmez)
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Kamera transformasyonunu uygula
+        camera.apply();
+        
+        // Labirenti çiz
+        drawMaze();
+        
+        // Çiz - Sadece görüş açısı içinde görünür
+        if (isEbe) {
+            // Ebe için görüş açısını göster
+            drawEbeView(myPlayer, true);
             
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'join_room',
-                    roomId: roomId,
-                    username: usernameInput.value,
-                    color: myColor
-                }));
-            }
+            // Görüş açısı dışında kalan alanı maskele (siyah kalsın)
+            drawViewMask();
         }
         
-        // Odadan ayrıl
-        function leaveRoom() {
-            showLobby();
-            currentRoomId = null;
-            players = {};
-            footprints = [];
-            
-            // Oyunu durdur
-            cancelAnimationFrame(gameLoop);
+        // Ayak izlerini çiz
+        drawFootprints();
+        
+        // Oyuncuları çiz
+        drawPlayers();
+        
+        // Kamera transformasyonunu geri al
+        camera.restore();
+        
+        // Eğer ebe donmuş durumdaysa sayaç bilgisini çiz
+        if (isEbe && isFreezed) {
+            drawFreezeCountdown();
         }
         
-        // Lobi ekranını göster
-        function showLobby() {
-            lobbyContainer.style.display = 'flex';
-            gameContainer.style.display = 'none';
-            refreshRooms();
-        }
+        // UI elemanlarını güncelle
+        updateDashUI();
+        updateStaminaUI();
         
-        // Startgame fonksiyonuna isFreezed'i sıfırlama ekle
-        function startGame() {
-            lobbyContainer.style.display = 'none';
-            gameContainer.style.display = 'block';
-            
-            // Rastgele başlangıç konumu
-            myPlayer.x = Math.random() * canvas.width;
-            myPlayer.y = Math.random() * canvas.height;
+        // Pozisyon güncellemesi gönder
+        sendPositionUpdate();
+        
+        requestAnimationFrame(gameLoop);
+    } catch (e) {
+        console.error("Oyun döngüsünde hata:", e);
+        requestAnimationFrame(gameLoop); // Hata olsa bile devam et
+    }
+}
+
+// Donma süresi görsel geri bildirimi
+function drawFreezeCountdown() {
+    ctx.save();
+    
+    // Yarı saydam kırmızı ekran efekti
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Sayaç mesajını göster
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('EBE HAZlRLANlYOR...', canvas.width / 2, canvas.height / 2);
+    
+    ctx.restore();
+}
+
+// Pozisyon güncellemesi gönder
+function sendPositionUpdate() {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'player_update',
+            x: myPlayer.x,
+            y: myPlayer.y,
+            angle: myPlayer.angle,
+            isRunning: myPlayer.isRunning
+        }));
+    }
+}
+
+// İki nokta arasındaki mesafeyi hesapla
+function distance(x1, y1, x2, y2) {
+    return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+}
+
+// Oyuncu pozisyonunu güncelle
+function updatePlayer(deltaTime) {
+    // Eğer oyuncu donmuş durumdaysa hareket etmesin
+    if (isFreezed) {
+        return; // Hareketi engelle
+    }
+    
+    // Dash yenilenme sayacını güncelle (sadece ebe için)
+    if (isEbe) {
+        updateDashRecharge(deltaTime);
+    }
+    
+    // Stamina'yı güncelle
+    updateStamina(deltaTime);
+    
+    // Klavye kontrolü (sadece hareket için)
+    let dx = 0;
+    let dy = 0;
+    
+    if (keys.w) dy -= 1;
+    if (keys.s) dy += 1;
+    if (keys.a) dx -= 1;
+    if (keys.d) dx += 1;
+    
+    // Normalleştirme
+    if (dx !== 0 && dy !== 0) {
+        dx *= 0.7071;
+        dy *= 0.7071;
+    }
+    
+    // Koşma durumu - stamina kontrolü ile
+    if (keys.shift && !myPlayer.isStaminaEmpty) {
+        myPlayer.isRunning = true;
+    } else {
+        myPlayer.isRunning = false;
+    }
+    
+    const speed = myPlayer.isRunning ? myPlayer.speed * 1.5 : myPlayer.speed;
+    
+    // Gizlenme durumunda şeffaflık değerini ayarla
+    if (playerIsHiding) {
+        playerHidingAlpha = HIDING_ALPHA_MIN;
+    } else {
+        playerHidingAlpha = 1.0;
+    }
+    
+    // Yeni pozisyon hesapla
+    let newX = myPlayer.x + dx * speed;
+    let newY = myPlayer.y + dy * speed;
+    
+    // Duvar çarpışma kontrolü
+    if (!checkWallCollision(newX, myPlayer.y)) {
+        myPlayer.x = newX;
+    }
+    
+    if (!checkWallCollision(myPlayer.x, newY)) {
+        myPlayer.y = newY;
+    }
+    
+    // Fare ile bakış açısı kontrolü - hareket yönünden bağımsız
+    const mX = mouseX - myPlayer.x;
+    const mY = mouseY - myPlayer.y;
+    myPlayer.angle = Math.atan2(mY, mX);
+    
+    // Gizlenme yerinde olup olmadığını kontrol et
+    playerIsHiding = checkHidingSpot(myPlayer.x, myPlayer.y);
+    
+    // Ayak izi oluşturma kontrolü
+    if (dx !== 0 || dy !== 0) {
+        const distMoved = distance(myPlayer.x, myPlayer.y, myPlayer.lastFootprintPos.x, myPlayer.lastFootprintPos.y);
+        myPlayer.footprintDistance += distMoved;
+        
+        if (myPlayer.footprintDistance >= FOOTPRINT_INTERVAL) {
+            myPlayer.footprintDistance = 0;
             myPlayer.lastFootprintPos.x = myPlayer.x;
             myPlayer.lastFootprintPos.y = myPlayer.y;
             
-            // Engeller oluştur
-            createObstacles();
-            
-            // Durum göstergesini güncelle
-            updateStatus();
-            
-            // Donma durumunu sıfırla
-            isFreezed = false;
-            
-            // Ebe mesajı
-            if (isEbe) {
-                showStatusMessage('Sen EBEsin! Diğer oyuncuları yakala!');
-            }
-            
-            // Oyun döngüsünü başlat
-            requestAnimationFrame(gameLoop);
-        }
-        
-        // Rastgele engeller oluştur
-        function createObstacles() {
-            obstacles = [];
-            const obstacleCount = 5;
-            
-            for (let i = 0; i < obstacleCount; i++) {
-                obstacles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    width: 50 + Math.random() * 100,
-                    height: 50 + Math.random() * 100,
-                    color: '#555'
-                });
+            // Ebe değilse ve gizlenmiyorsa ayak izi bırak
+            if (!isEbe && !playerIsHiding) {
+                createFootprint();
             }
         }
+    }
+}
+
+// Ayak izlerini güncelle
+function updateFootprints() {
+    const currentTime = Date.now();
+    
+    footprints = footprints.filter(footprint => {
+        const age = currentTime - footprint.creationTime;
+        return age < footprint.maxLifetime;
+    });
+    
+    // Her bir ayak izinin rengini ve şeffaflığını güncelle
+    for (const footprint of footprints) {
+        const age = currentTime - footprint.creationTime;
+        const colorRatio = Math.min(age / 300, 1);
         
-        // Ayak izi oluştur
-        function createFootprint() {
-            const footprint = {
-                x: myPlayer.x,
-                y: myPlayer.y,
-                angle: myPlayer.angle,
-                size: 6,
-                color: 'red',
-                alpha: 1.0,
-                creationTime: Date.now(),
-                maxLifetime: FOOTPRINT_DURATION,
-                isFromRunning: myPlayer.isRunning // Koşarak mı bırakıldı?
-            };
-            
-            footprints.push(footprint);
-            
-            // Sunucuya bildir
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'footprint_created',
-                    footprint: footprint
-                }));
-            }
-        }
+        // Kırmızıdan beyaza geçiş
+        const r = 255;
+        const g = Math.floor(255 * colorRatio);
+        const b = Math.floor(255 * colorRatio);
         
-        // Oyun döngüsü
-        function gameLoop(timestamp) {
-            // Hata ayıklama için güvenlik kontrolü
-            if (!canvas) {
-                console.error("Canvas elementi bulunamadı!");
-                return;
-            }
-            
-            if (!lastTime) lastTime = timestamp;
-            const deltaTime = timestamp - lastTime;
-            lastTime = timestamp;
-            
-            try {
-                // Oyuncuyu güncelle
-                updatePlayer(deltaTime);
-                
-                // Ayak izlerini güncelle
-                updateFootprints();
-                
-                // Yakalama kontrolü
-                if (isEbe && !isFreezed) {
-                    checkCatchPlayers();
-                }
-                
-                // Siyah ekran çiz (her şey görünmez)
-                ctx.fillStyle = '#111';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Çiz - Sadece görüş açısı içinde görünür
-                draw();
-                
-                // Eğer ebe donmuş durumdaysa sayaç bilgisini çiz
-                if (isEbe && isFreezed) {
-                    drawFreezeCountdown();
-                }
-                
-                // Pozisyon güncellemesi gönder
-                sendPositionUpdate();
-                
-                requestAnimationFrame(gameLoop);
-            } catch (e) {
-                console.error("Oyun döngüsünde hata:", e);
-                requestAnimationFrame(gameLoop); // Hata olsa bile devam et
-            }
-        }
+        // Zamanla şeffaflaşma
+        const alphaRatio = 1 - (age / footprint.maxLifetime);
+        const alpha = Math.max(0, alphaRatio);
         
-        // Donma süresi görsel geri bildirimi
-        function drawFreezeCountdown() {
-            ctx.save();
-            
-            // Yarı saydam kırmızı ekran efekti
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Sayaç mesajını göster
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 48px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('EBE HAZlRLANlYOR...', canvas.width / 2, canvas.height / 2);
-            
-            ctx.restore();
-        }
+        footprint.color = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        footprint.alpha = alpha;
+    }
+}
+
+// Yakalama kontrolü
+function checkCatchPlayers() {
+    // Donma durumundaysa yakalama yapılamaz
+    if (isFreezed) return;
+    
+    Object.keys(players).forEach(playerId => {
+        const player = players[playerId];
         
-        // Pozisyon güncellemesi gönder
-        function sendPositionUpdate() {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'player_update',
-                    x: myPlayer.x,
-                    y: myPlayer.y,
-                    angle: myPlayer.angle,
-                    isRunning: myPlayer.isRunning
-                }));
-            }
-        }
-        
-        // İki nokta arasındaki mesafeyi hesapla
-        function distance(x1, y1, x2, y2) {
-            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-        }
-        
-        // Oyuncu pozisyonunu güncelle
-        function updatePlayer(deltaTime) {
-            // Eğer oyuncu donmuş durumdaysa hareket etmesin
-            if (isFreezed) {
-                return; // Hareketi engelle
-            }
+        // Oyuncu zaten ebe değilse
+        if (!player.isEbe) {
+            const dist = distance(myPlayer.x, myPlayer.y, player.x, player.y);
             
-            // Klavye kontrolü (sadece hareket için)
-            let dx = 0;
-            let dy = 0;
+            // Görüş açısı kontrolü
+            const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
             
-            if (keys.w) dy -= 1;
-            if (keys.s) dy += 1;
-            if (keys.a) dx -= 1;
-            if (keys.d) dx += 1;
-            
-            // Normalleştirme
-            if (dx !== 0 && dy !== 0) {
-                dx *= 0.7071;
-                dy *= 0.7071;
-            }
-            
-            // Koşma durumu
-            myPlayer.isRunning = keys.shift;
-            const speed = myPlayer.isRunning ? myPlayer.speed * 1.5 : myPlayer.speed;
-            
-            // Yeni pozisyon - sadece WASD ile hareket
-            const newX = myPlayer.x + dx * speed;
-            const newY = myPlayer.y + dy * speed;
-            
-            // Sınır kontrolü
-            if (newX > PLAYER_SIZE && newX < canvas.width - PLAYER_SIZE) {
-                myPlayer.x = newX;
-            }
-            if (newY > PLAYER_SIZE && newY < canvas.height - PLAYER_SIZE) {
-                myPlayer.y = newY;
-            }
-            
-            // Fare ile bakış açısı kontrolü - hareket yönünden bağımsız
-            const mX = mouseX - myPlayer.x;
-            const mY = mouseY - myPlayer.y;
-            myPlayer.angle = Math.atan2(mY, mX);
-            
-            // Ayak izi oluşturma kontrolü
-            if (dx !== 0 || dy !== 0) {
-                const distMoved = distance(myPlayer.x, myPlayer.y, myPlayer.lastFootprintPos.x, myPlayer.lastFootprintPos.y);
-                myPlayer.footprintDistance += distMoved;
-                
-                if (myPlayer.footprintDistance >= FOOTPRINT_INTERVAL) {
-                    myPlayer.footprintDistance = 0;
-                    myPlayer.lastFootprintPos.x = myPlayer.x;
-                    myPlayer.lastFootprintPos.y = myPlayer.y;
-                    
-                    // Ebe değilse ayak izi bırak
-                    if (!isEbe) {
-                        createFootprint();
-                    }
+            // Sadece görüş açısındaki oyuncuları yakalayabilir
+            if (dist < CATCH_DISTANCE && inViewAngle) {
+                // Oyuncuyu yakala!
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'catch_player',
+                        caughtPlayerId: playerId
+                    }));
                 }
             }
         }
+    });
+}
+
+// Açıda olup olmadığını kontrol et
+function isInAngle(centerX, centerY, targetX, targetY, angle, viewAngle) {
+    const dx = targetX - centerX;
+    const dy = targetY - centerY;
+    
+    let targetAngle = Math.atan2(dy, dx);
+    if (targetAngle < 0) targetAngle += Math.PI * 2;
+    if (angle < 0) angle += Math.PI * 2;
+    
+    const halfViewAngle = (viewAngle * Math.PI / 180) / 2;
+    const lowerBound = angle - halfViewAngle;
+    const upperBound = angle + halfViewAngle;
+    
+    if (lowerBound < 0) {
+        return targetAngle > (lowerBound + Math.PI * 2) || targetAngle < upperBound;
+    }
+    if (upperBound > Math.PI * 2) {
+        return targetAngle < (upperBound - Math.PI * 2) || targetAngle > lowerBound;
+    }
+    
+    return targetAngle > lowerBound && targetAngle < upperBound;
+}
+
+// Ebe görüş açısını çiz
+function drawEbeView(player, isCurrentPlayer) {
+    const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
+    
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    ctx.arc(player.x, player.y, VIEW_DISTANCE, player.angle - halfViewAngle, player.angle + halfViewAngle);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+// Oyuncuları çiz
+function drawPlayers() {
+    // Önce diğer oyuncuları çiz
+    Object.values(players).forEach(player => {
+        let visible = true;
         
-        // Ayak izlerini güncelle
-        function updateFootprints() {
-            const currentTime = Date.now();
+        // Ebe için görüş kontrolü
+        if (isEbe) {
+            // Görüş açısı içinde olup olmadığını kontrol et
+            const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
+            const inViewDistance = distance(myPlayer.x, myPlayer.y, player.x, player.y) < VIEW_DISTANCE;
             
-            footprints = footprints.filter(footprint => {
-                const age = currentTime - footprint.creationTime;
-                return age < footprint.maxLifetime;
-            });
+            // Ebe sadece görüş açısında ve mesafesi içindeyse görsün
+            visible = inViewAngle && inViewDistance;
             
-            // Her bir ayak izinin rengini ve şeffaflığını güncelle
-            for (const footprint of footprints) {
-                const age = currentTime - footprint.creationTime;
-                const colorRatio = Math.min(age / 300, 1);
-                
-                // Kırmızıdan beyaza geçiş
-                const r = 255;
-                const g = Math.floor(255 * colorRatio);
-                const b = Math.floor(255 * colorRatio);
-                
-                // Zamanla şeffaflaşma
-                const alphaRatio = 1 - (age / footprint.maxLifetime);
-                const alpha = Math.max(0, alphaRatio);
-                
-                footprint.color = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                footprint.alpha = alpha;
+            // Duvar arkasında mı kontrol et (ışın izleme)
+            if (visible) {
+                visible = !isWallBetween(myPlayer.x, myPlayer.y, player.x, player.y);
             }
         }
         
-        // Yakalama kontrolü
-        function checkCatchPlayers() {
-            // Donma durumundaysa yakalama yapılamaz
-            if (isFreezed) return;
-            
-            Object.keys(players).forEach(playerId => {
-                const player = players[playerId];
-                
-                // Oyuncu zaten ebe değilse
-                if (!player.isEbe) {
-                    const dist = distance(myPlayer.x, myPlayer.y, player.x, player.y);
-                    
-                    // Görüş açısı kontrolü
-                    const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
-                    
-                    // Sadece görüş açısındaki oyuncuları yakalayabilir
-                    if (dist < CATCH_DISTANCE && inViewAngle) {
-                        // Oyuncuyu yakala!
-                        if (socket && socket.readyState === WebSocket.OPEN) {
-                            socket.send(JSON.stringify({
-                                type: 'catch_player',
-                                caughtPlayerId: playerId
-                            }));
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Açıda olup olmadığını kontrol et
-        function isInAngle(centerX, centerY, targetX, targetY, angle, viewAngle) {
-            const dx = targetX - centerX;
-            const dy = targetY - centerY;
-            
-            let targetAngle = Math.atan2(dy, dx);
-            if (targetAngle < 0) targetAngle += Math.PI * 2;
-            if (angle < 0) angle += Math.PI * 2;
-            
-            const halfViewAngle = (viewAngle * Math.PI / 180) / 2;
-            const lowerBound = angle - halfViewAngle;
-            const upperBound = angle + halfViewAngle;
-            
-            if (lowerBound < 0) {
-                return targetAngle > (lowerBound + Math.PI * 2) || targetAngle < upperBound;
-            }
-            if (upperBound > Math.PI * 2) {
-                return targetAngle < (upperBound - Math.PI * 2) || targetAngle > lowerBound;
-            }
-            
-            return targetAngle > lowerBound && targetAngle < upperBound;
-        }
-        
-        // Ebe görüş açısını çiz
-        function drawEbeView(player, isCurrentPlayer) {
-            const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
+        if (visible) {
+            // Oyuncu gizlenme yerinde mi kontrol et
+            const isPlayerHiding = checkHidingSpot(player.x, player.y);
             
             ctx.save();
-            ctx.globalAlpha = 0.2;
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.moveTo(player.x, player.y);
-            ctx.arc(player.x, player.y, VIEW_DISTANCE, player.angle - halfViewAngle, player.angle + halfViewAngle);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-        }
-        
-        // Oyuncuları çiz
-        function drawPlayers() {
-            // Önce diğer oyuncuları çiz
-            Object.values(players).forEach(player => {
-                let visible = true;
-                
-                // Ebe için görüş kontrolü
-                if (isEbe) {
-                    // Görüş açısı içinde olup olmadığını kontrol et
-                    const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
-                    const inViewDistance = distance(myPlayer.x, myPlayer.y, player.x, player.y) < VIEW_DISTANCE;
-                    
-                    // Ebe sadece görüş açısında ve mesafesi içindeyse görsün
-                    visible = inViewAngle && inViewDistance;
-                }
-                
-                if (visible) {
-                    ctx.save();
-                    ctx.translate(player.x, player.y);
-                    ctx.rotate(player.angle);
-                    
-                    // Oyuncu çizimi
-                    ctx.fillStyle = player.isEbe ? 'red' : player.color;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
-                    ctx.fill();
-                    
-                    // Koşma göstergesi
-                    if (player.isRunning) {
-                        ctx.strokeStyle = 'white';
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, PLAYER_SIZE + 3, 0, Math.PI * 2);
-                        ctx.stroke();
-                    }
-                    
-                    // Yön göstergesi
-                    ctx.fillStyle = 'white';
-                    ctx.beginPath();
-                    ctx.moveTo(PLAYER_SIZE, 0);
-                    ctx.lineTo(PLAYER_SIZE - 5, -3);
-                    ctx.lineTo(PLAYER_SIZE - 5, 3);
-                    ctx.closePath();
-                    ctx.fill();
-                    
-                    // Kullanıcı adı
-                    ctx.fillStyle = 'white';
-                    ctx.textAlign = 'center';
-                    ctx.font = '12px Arial';
-                    ctx.fillText(player.username, 0, -PLAYER_SIZE - 5);
-                    
-                    ctx.restore();
-                    
-                    // Ebe görüş açısı
-                    if (player.isEbe) {
-                        drawEbeView(player, false);
-                    }
-                }
-            });
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
             
-            // Kendimi çiz
-            ctx.save();
-            ctx.translate(myPlayer.x, myPlayer.y);
-            ctx.rotate(myPlayer.angle);
+            // Oyuncu çizimi - gizleniyorsa şeffaflığı azalt
+            if (isPlayerHiding) {
+                ctx.globalAlpha = HIDING_ALPHA_MIN;
+            }
             
-            // Oyuncu çizimi
-            ctx.fillStyle = isEbe ? 'red' : myColor;
+            ctx.fillStyle = player.isEbe ? 'red' : player.color;
             ctx.beginPath();
             ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
             ctx.fill();
             
             // Koşma göstergesi
-            if (myPlayer.isRunning) {
+            if (player.isRunning) {
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -1639,204 +1845,586 @@ function connectWebSocket() {
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
             ctx.font = '12px Arial';
-            ctx.fillText(usernameInput.value || 'Ben', 0, -PLAYER_SIZE - 5);
+            ctx.fillText(player.username, 0, -PLAYER_SIZE - 5);
             
             ctx.restore();
             
             // Ebe görüş açısı
-            if (isEbe) {
-                drawEbeView(myPlayer, true);
+            if (player.isEbe) {
+                drawEbeView(player, false);
             }
         }
+    });
+    
+    // Kendimi çiz
+    ctx.save();
+    ctx.translate(myPlayer.x, myPlayer.y);
+    ctx.rotate(myPlayer.angle);
+    
+    // Oyuncu gizlenme yerinde mi kontrol et 
+    playerIsHiding = checkHidingSpot(myPlayer.x, myPlayer.y);
+    
+    // Oyuncu çizimi - gizleniyorsa şeffaflığı azalt
+    if (playerIsHiding) {
+        ctx.globalAlpha = playerHidingAlpha;
+    }
+    
+    ctx.fillStyle = isEbe ? 'red' : myColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Koşma göstergesi
+    if (myPlayer.isRunning) {
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, PLAYER_SIZE + 3, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // Yön göstergesi
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.moveTo(PLAYER_SIZE, 0);
+    ctx.lineTo(PLAYER_SIZE - 5, -3);
+    ctx.lineTo(PLAYER_SIZE - 5, 3);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Kullanıcı adı
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.font = '12px Arial';
+    ctx.fillText(usernameInput.value || 'Ben', 0, -PLAYER_SIZE - 5);
+    
+    // Gizlenme durumu bildirimi
+    if (playerIsHiding) {
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+        ctx.font = '10px Arial';
+        ctx.fillText('Gizleniyorsun!', 0, -PLAYER_SIZE - 20);
+    }
+    
+    ctx.restore();
+    
+    // Ebe görüş açısı
+    if (isEbe) {
+        drawEbeView(myPlayer, true);
+    }
+}
+
+// Ayak izlerini çiz
+function drawFootprints() {
+    footprints.forEach(footprint => {
+        // Ebeysem ve belirli koşullar sağlanıyorsa ayak izlerini göster
+        if (!isEbe) return;
         
-        // Ayak izlerini çiz
-        function drawFootprints() {
-            footprints.forEach(footprint => {
-                // Ebeysem ve belirli koşullar sağlanıyorsa ayak izlerini göster
-                if (!isEbe) return;
-                
-                const dist = distance(myPlayer.x, myPlayer.y, footprint.x, footprint.y);
-                const isNearby = dist < FOOTPRINT_DETECTION_DISTANCE;
-                const isFromRunningPlayer = footprint.isFromRunning;
-                
-                // Sadece yakın mesafedeki veya koşan oyuncuların ayak izlerini göster
-                if (!isNearby && !isFromRunningPlayer) return;
-                
-                ctx.save();
-                ctx.translate(footprint.x, footprint.y);
-                ctx.rotate(footprint.angle);
-                
-                // Ayak izini çiz
-                ctx.fillStyle = footprint.color;
-                
-                // Sol-sağ ayak izi alternatifi
-                const isLeft = Math.floor(footprint.x + footprint.y) % 2 === 0;
-                
-                // Gerçekçi ayak izi şekli
-                if (isLeft) {
-                    // Sol ayak
-                    ctx.beginPath();
-                    // Topuk kısmı
-                    ctx.ellipse(-2, 5, footprint.size * 0.8, footprint.size, 0, 0, Math.PI * 2);
-                    // Ayak tabanı
-                    ctx.moveTo(-3, 0);
-                    ctx.bezierCurveTo(
-                        -4, -5,  // Kontrol noktası 1
-                        0, -10,  // Kontrol noktası 2
-                        2, -12   // Bitiş noktası
-                    );
-                    // Ayak parmakları
-                    ctx.moveTo(1, -11);
-                    ctx.arc(1, -11, footprint.size * 0.4, 0, Math.PI, true);  // Büyük parmak
-                    ctx.moveTo(0, -10);
-                    ctx.arc(0, -10, footprint.size * 0.3, 0, Math.PI, true);  // 2. parmak
-                    ctx.moveTo(-1, -9);
-                    ctx.arc(-1, -9, footprint.size * 0.25, 0, Math.PI, true); // 3. parmak
-                    ctx.moveTo(-2, -8);
-                    ctx.arc(-2, -8, footprint.size * 0.2, 0, Math.PI, true);  // 4. parmak
-                    ctx.moveTo(-3, -7);
-                    ctx.arc(-3, -7, footprint.size * 0.15, 0, Math.PI, true); // Küçük parmak
-                    ctx.fill();
-                } else {
-                    // Sağ ayak
-                    ctx.beginPath();
-                    // Topuk kısmı
-                    ctx.ellipse(2, 5, footprint.size * 0.8, footprint.size, 0, 0, Math.PI * 2);
-                    // Ayak tabanı
-                    ctx.moveTo(3, 0);
-                    ctx.bezierCurveTo(
-                        4, -5,   // Kontrol noktası 1
-                        0, -10,  // Kontrol noktası 2
-                        -2, -12  // Bitiş noktası
-                    );
-                    // Ayak parmakları
-                    ctx.moveTo(-1, -11);
-                    ctx.arc(-1, -11, footprint.size * 0.4, 0, Math.PI, true);  // Büyük parmak
-                    ctx.moveTo(0, -10);
-                    ctx.arc(0, -10, footprint.size * 0.3, 0, Math.PI, true);   // 2. parmak
-                    ctx.moveTo(1, -9);
-                    ctx.arc(1, -9, footprint.size * 0.25, 0, Math.PI, true);   // 3. parmak
-                    ctx.moveTo(2, -8);
-                    ctx.arc(2, -8, footprint.size * 0.2, 0, Math.PI, true);    // 4. parmak
-                    ctx.moveTo(3, -7);
-                    ctx.arc(3, -7, footprint.size * 0.15, 0, Math.PI, true);   // Küçük parmak
-                    ctx.fill();
-                }
-                
-                ctx.restore();
-            });
-        }
+        const dist = distance(myPlayer.x, myPlayer.y, footprint.x, footprint.y);
+        const isNearby = dist < FOOTPRINT_DETECTION_DISTANCE;
+        const isFromRunningPlayer = footprint.isFromRunning;
         
-        // Engelleri çiz
-        function drawObstacles() {
-            obstacles.forEach(obstacle => {
-                ctx.fillStyle = obstacle.color;
-                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-            });
-        }
+        // Sadece yakın mesafedeki veya koşan oyuncuların ayak izlerini göster
+        if (!isNearby && !isFromRunningPlayer) return;
         
-        // Oyunu çiz
-        function draw() {
-            // Arkaplanı siyah bırak (zaten gameLoop'ta temizlendi)
-            
-            if (isEbe) {
-                // Ebe için görüş açısını göster
-                drawEbeView(myPlayer, true);
-                
-                // Görüş açısı dışında kalan alanı maskele (siyah kalsın)
-                drawViewMask();
-            } else {
-                // Ebe değilsek normal arkaplan
-                ctx.fillStyle = '#111';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
-            
-            // Engelleri çiz
-            drawObstacles();
-            
-            // Ayak izlerini çiz
-            drawFootprints();
-            
-            // Oyuncuları çiz
-            drawPlayers();
-        }
+        ctx.save();
+        ctx.translate(footprint.x, footprint.y);
+        ctx.rotate(footprint.angle);
         
-        // Görüş açısı maskesi
-        function drawViewMask() {
-            const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
-            
-            // Görüş açısı maskesi
-            ctx.save();
-            ctx.fillStyle = '#111';
-            
-            // Tüm ekran için maske oluştur
+        // Ayak izini çiz
+        ctx.fillStyle = footprint.color;
+        
+        // Sol-sağ ayak izi alternatifi
+        const isLeft = Math.floor(footprint.x + footprint.y) % 2 === 0;
+        
+        // Gerçekçi ayak izi şekli
+        if (isLeft) {
+            // Sol ayak
             ctx.beginPath();
-            ctx.rect(0, 0, canvas.width, canvas.height);
-            
-            // Görüş açısını maskeden çıkar
-            ctx.moveTo(myPlayer.x, myPlayer.y);
-            ctx.arc(myPlayer.x, myPlayer.y, VIEW_DISTANCE, 
-                   myPlayer.angle - halfViewAngle, 
-                   myPlayer.angle + halfViewAngle);
-            ctx.closePath();
-            
-            // "evenodd" fill-rule ile görüş açısı dışındaki alanı kapla
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.fill('evenodd');
-            ctx.globalCompositeOperation = 'source-over';
-            
-            ctx.restore();
+            // Topuk kısmı
+            ctx.ellipse(-2, 5, footprint.size * 0.8, footprint.size, 0, 0, Math.PI * 2);
+            // Ayak tabanı
+            ctx.moveTo(-3, 0);
+            ctx.bezierCurveTo(
+                -4, -5,  // Kontrol noktası 1
+                0, -10,  // Kontrol noktası 2
+                2, -12   // Bitiş noktası
+            );
+            // Ayak parmakları
+            ctx.moveTo(1, -11);
+            ctx.arc(1, -11, footprint.size * 0.4, 0, Math.PI, true);  // Büyük parmak
+            ctx.moveTo(0, -10);
+            ctx.arc(0, -10, footprint.size * 0.3, 0, Math.PI, true);  // 2. parmak
+            ctx.moveTo(-1, -9);
+            ctx.arc(-1, -9, footprint.size * 0.25, 0, Math.PI, true); // 3. parmak
+            ctx.moveTo(-2, -8);
+            ctx.arc(-2, -8, footprint.size * 0.2, 0, Math.PI, true);  // 4. parmak
+            ctx.moveTo(-3, -7);
+            ctx.arc(-3, -7, footprint.size * 0.15, 0, Math.PI, true); // Küçük parmak
+            ctx.fill();
+        } else {
+            // Sağ ayak
+            ctx.beginPath();
+            // Topuk kısmı
+            ctx.ellipse(2, 5, footprint.size * 0.8, footprint.size, 0, 0, Math.PI * 2);
+            // Ayak tabanı
+            ctx.moveTo(3, 0);
+            ctx.bezierCurveTo(
+                4, -5,   // Kontrol noktası 1
+                0, -10,  // Kontrol noktası 2
+                -2, -12  // Bitiş noktası
+            );
+            // Ayak parmakları
+            ctx.moveTo(-1, -11);
+            ctx.arc(-1, -11, footprint.size * 0.4, 0, Math.PI, true);  // Büyük parmak
+            ctx.moveTo(0, -10);
+            ctx.arc(0, -10, footprint.size * 0.3, 0, Math.PI, true);   // 2. parmak
+            ctx.moveTo(1, -9);
+            ctx.arc(1, -9, footprint.size * 0.25, 0, Math.PI, true);   // 3. parmak
+            ctx.moveTo(2, -8);
+            ctx.arc(2, -8, footprint.size * 0.2, 0, Math.PI, true);    // 4. parmak
+            ctx.moveTo(3, -7);
+            ctx.arc(3, -7, footprint.size * 0.15, 0, Math.PI, true);   // Küçük parmak
+            ctx.fill();
         }
         
-        // Pencere yeniden boyutlandırma
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        });
+        ctx.restore();
+    });
+}
+
+// Engelleri çiz
+function drawObstacles() {
+    obstacles.forEach(obstacle => {
+        ctx.fillStyle = obstacle.color;
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+    });
+}
+
+// Oyunu çiz
+function draw() {
+    // Arkaplanı siyah bırak (zaten gameLoop'ta temizlendi)
+    
+    if (isEbe) {
+        // Ebe için görüş açısını göster
+        drawEbeView(myPlayer, true);
         
-        // Fare kontrolleri
-        canvas.addEventListener('mousemove', (e) => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-        });
+        // Görüş açısı dışında kalan alanı maskele (siyah kalsın)
+        drawViewMask();
+    } else {
+        // Ebe değilsek normal arkaplan
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Engelleri çiz
+    drawObstacles();
+    
+    // Ayak izlerini çiz
+    drawFootprints();
+    
+    // Oyuncuları çiz
+    drawPlayers();
+    
+    // UI elemanlarını güncelle
+    updateDashUI();
+    updateStaminaUI();
+}
+
+// Görüş açısı maskesi
+function drawViewMask() {
+    const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
+    
+    // Görüş açısı maskesi
+    ctx.save();
+    ctx.fillStyle = '#111';
+    
+    // Tüm ekran için maske oluştur
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    
+    // Görüş açısını maskeden çıkar
+    ctx.moveTo(myPlayer.x, myPlayer.y);
+    ctx.arc(myPlayer.x, myPlayer.y, VIEW_DISTANCE, 
+           myPlayer.angle - halfViewAngle, 
+           myPlayer.angle + halfViewAngle);
+    ctx.closePath();
+    
+    // "evenodd" fill-rule ile görüş açısı dışındaki alanı kapla
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fill('evenodd');
+    ctx.globalCompositeOperation = 'source-over';
+    
+    ctx.restore();
+}
+
+// Pencere yeniden boyutlandırma
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+// Fare kontrolleri
+canvas.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+});
+
+// Klavye kontrolleri
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'w' || e.key === 'W') keys.w = true;
+    if (e.key === 'a' || e.key === 'A') keys.a = true;
+    if (e.key === 's' || e.key === 'S') keys.s = true;
+    if (e.key === 'd' || e.key === 'D') keys.d = true;
+    if (e.key === 'Shift') {
+        keys.shift = true;
+        // Eğer Ebe ise ve shift tuşuna basıldıysa dash yap
+        if (isEbe) {
+            performDash();
+        }
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    if (e.key === 'w' || e.key === 'W') keys.w = false;
+    if (e.key === 'a' || e.key === 'A') keys.a = false;
+    if (e.key === 's' || e.key === 'S') keys.s = false;
+    if (e.key === 'd' || e.key === 'D') keys.d = false;
+    if (e.key === 'Shift') keys.shift = false;
+});
+
+// Sayfa yüklendiğinde elementleri hazırla
+document.addEventListener('DOMContentLoaded', function() {
+    // Sayfa hazır olduğunda kan elementlerini başlat
+    initBloodElements();
+    
+    // Dash sayacı ve stamina barı UI elementlerini oluştur
+    createGameUI();
+});
+
+// Kontroller
+createRoomBtn.addEventListener('click', () => {
+    createRoomPanel.style.display = 'block';
+});
+
+createRoomSubmit.addEventListener('click', createRoom);
+
+createRoomCancel.addEventListener('click', () => {
+    createRoomPanel.style.display = 'none';
+});
+
+refreshRoomsBtn.addEventListener('click', refreshRooms);
+
+leaveRoomBtn.addEventListener('click', leaveRoom);
+
+// Rastgele bir kullanıcı adı öner
+usernameInput.value = `Oyuncu${Math.floor(Math.random() * 1000)}`;
+
+// Oyun UI elementlerini oluştur
+function createGameUI() {
+    // Dash sayacı için UI ekle
+    dashUI = document.createElement('div');
+    dashUI.id = 'dash-counter';
+    dashUI.className = 'game-ui-element';
+    dashUI.innerHTML = `
+        <div class="ui-title">Dash Hakkı</div>
+        <div class="dash-icons">
+            <span class="dash-icon available"></span>
+            <span class="dash-icon available"></span>
+            <span class="dash-icon available"></span>
+        </div>
+        <div class="dash-cooldown"></div>
+    `;
+    
+    // Stamina barı için UI ekle
+    staminaBar = document.createElement('div');
+    staminaBar.id = 'stamina-bar';
+    staminaBar.className = 'game-ui-element';
+    staminaBar.innerHTML = `
+        <div class="ui-title">Stamina</div>
+        <div class="stamina-container">
+            <div class="stamina-fill"></div>
+        </div>
+    `;
+    
+    // Game container içine ekle
+    gameContainer.appendChild(dashUI);
+    gameContainer.appendChild(staminaBar);
+    
+    // CSS ekle
+    const style = document.createElement('style');
+    style.textContent = `
+        .game-ui-element {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            padding: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 5;
+        }
         
-        // Klavye kontrolleri
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'w' || e.key === 'W') keys.w = true;
-            if (e.key === 'a' || e.key === 'A') keys.a = true;
-            if (e.key === 's' || e.key === 'S') keys.s = true;
-            if (e.key === 'd' || e.key === 'D') keys.d = true;
-            if (e.key === 'Shift') keys.shift = true;
-        });
+        .ui-title {
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
         
-        window.addEventListener('keyup', (e) => {
-            if (e.key === 'w' || e.key === 'W') keys.w = false;
-            if (e.key === 'a' || e.key === 'A') keys.a = false;
-            if (e.key === 's' || e.key === 'S') keys.s = false;
-            if (e.key === 'd' || e.key === 'D') keys.d = false;
-            if (e.key === 'Shift') keys.shift = false;
-        });
+        #dash-counter {
+            right: 10px;
+            bottom: 80px;
+            width: 120px;
+        }
         
-        // Kontroller
-        createRoomBtn.addEventListener('click', () => {
-            createRoomPanel.style.display = 'block';
-        });
+        .dash-icons {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
         
-        createRoomSubmit.addEventListener('click', createRoom);
+        .dash-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #333;
+            display: inline-block;
+        }
         
-        createRoomCancel.addEventListener('click', () => {
-            createRoomPanel.style.display = 'none';
-        });
+        .dash-icon.available {
+            background-color: #e74c3c;
+            box-shadow: 0 0 5px #e74c3c;
+        }
         
-        refreshRoomsBtn.addEventListener('click', refreshRooms);
+        .dash-cooldown {
+            height: 2px;
+            width: 100%;
+            background-color: #333;
+            position: relative;
+        }
         
-        leaveRoomBtn.addEventListener('click', leaveRoom);
+        .dash-cooldown::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background-color: #e74c3c;
+        }
         
-        // Rastgele bir kullanıcı adı öner
-        usernameInput.value = `Oyuncu${Math.floor(Math.random() * 1000)}`;
+        #stamina-bar {
+            left: 10px;
+            bottom: 80px;
+            width: 150px;
+        }
         
-        // WebSocket bağlantısı kur
-        connectWebSocket();
+        .stamina-container {
+            width: 100%;
+            height: 10px;
+            background-color: #333;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .stamina-fill {
+            height: 100%;
+            width: 100%;
+            background-color: #2ecc71;
+            transition: width 0.3s;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Dash sayacını güncelle
+function updateDashUI() {
+    if (!dashUI) return;
+    
+    // Dash ikonlarını güncelle
+    const dashIcons = dashUI.querySelectorAll('.dash-icon');
+    for (let i = 0; i < dashIcons.length; i++) {
+        if (i < myPlayer.dashCount) {
+            dashIcons[i].classList.add('available');
+        } else {
+            dashIcons[i].classList.remove('available');
+        }
+    }
+    
+    // Dash bekleme süresini göster
+    const dashCooldown = dashUI.querySelector('.dash-cooldown');
+    if (dashCooldown) {
+        const currentTime = Date.now();
+        const timeSinceLastDash = currentTime - myPlayer.lastDashTime;
+        
+        if (timeSinceLastDash < DASH_COOLDOWN) {
+            const progress = (timeSinceLastDash / DASH_COOLDOWN) * 100;
+            dashCooldown.style.background = `linear-gradient(to right, #e74c3c ${progress}%, #333 ${progress}%)`;
+        } else {
+            dashCooldown.style.background = `#333`;
+        }
+    }
+}
+
+// Stamina barını güncelle
+function updateStaminaUI() {
+    if (!staminaBar) return;
+    
+    const staminaFill = staminaBar.querySelector('.stamina-fill');
+    if (staminaFill) {
+        staminaFill.style.width = `${myPlayer.stamina}%`;
+        
+        // Stamina düşükse rengi değiştir
+        if (myPlayer.stamina < 30) {
+            staminaFill.style.backgroundColor = '#e74c3c'; // Kırmızı
+        } else if (myPlayer.stamina < 60) {
+            staminaFill.style.backgroundColor = '#f39c12'; // Turuncu
+        } else {
+            staminaFill.style.backgroundColor = '#2ecc71'; // Yeşil
+        }
+    }
+}
+
+// Dash işlemini gerçekleştir
+function performDash() {
+    if (!isEbe) return; // Sadece ebe dash yapabilir
+    
+    const currentTime = Date.now();
+    
+    // Dash yapabilme kontrolü
+    if (myPlayer.dashCount <= 0 || (currentTime - myPlayer.lastDashTime) < DASH_COOLDOWN) {
+        return; // Dash hakkı yok veya bekleme süresi dolmamış
+    }
+    
+    // Dash yapılacak oyuncuyu bul (görüş açısındaki en yakın oyuncu)
+    let targetPlayer = null;
+    let minDistance = Infinity;
+    
+    Object.values(players).forEach(player => {
+        if (!player.isEbe) { // Ebe olmayan oyuncular hedef olabilir
+            const dist = distance(myPlayer.x, myPlayer.y, player.x, player.y);
+            const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
+            
+            if (inViewAngle && dist < minDistance && dist < VIEW_DISTANCE) {
+                minDistance = dist;
+                targetPlayer = player;
+            }
+        }
+    });
+    
+    // Hedef oyuncu yoksa dash yapma
+    if (!targetPlayer) return;
+    
+    // Dash yönünü hesapla
+    const dashAngle = Math.atan2(targetPlayer.y - myPlayer.y, targetPlayer.x - myPlayer.x);
+    
+    // Dash hareketini başlat
+    const dashInterval = setInterval(() => {
+        // Dash hareketini yap
+        myPlayer.x += Math.cos(dashAngle) * (DASH_POWER / 10);
+        myPlayer.y += Math.sin(dashAngle) * (DASH_POWER / 10);
+        
+        // Sınır kontrolü
+        if (myPlayer.x < PLAYER_SIZE) myPlayer.x = PLAYER_SIZE;
+        if (myPlayer.x > canvas.width - PLAYER_SIZE) myPlayer.x = canvas.width - PLAYER_SIZE;
+        if (myPlayer.y < PLAYER_SIZE) myPlayer.y = PLAYER_SIZE;
+        if (myPlayer.y > canvas.height - PLAYER_SIZE) myPlayer.y = canvas.height - PLAYER_SIZE;
+    }, 10);
+    
+    // Dash süresini sınırla
+    setTimeout(() => {
+        clearInterval(dashInterval);
+    }, DASH_DURATION);
+    
+    // Dash hakkını azalt ve son dash zamanını güncelle
+    myPlayer.dashCount--;
+    myPlayer.lastDashTime = currentTime;
+    
+    // Dash UI'ı güncelle
+    updateDashUI();
+    
+    // Dash ses efekti
+    playDashSound();
+}
+
+// Dash yenilenme sayacını güncelle
+function updateDashRecharge(deltaTime) {
+    const currentTime = Date.now();
+    
+    // Dash hakkı maksimumda ise işlem yapma
+    if (myPlayer.dashCount >= MAX_DASH_COUNT) {
+        myPlayer.lastDashRechargeTime = currentTime;
+        return;
+    }
+    
+    // Dash hakkı yenilenme süresi kontrol edilir
+    if ((currentTime - myPlayer.lastDashRechargeTime) >= DASH_RECHARGE_TIME) {
+        // Yeni dash hakkı ekle
+        myPlayer.dashCount = Math.min(myPlayer.dashCount + 1, MAX_DASH_COUNT);
+        myPlayer.lastDashRechargeTime = currentTime;
+        
+        // UI güncelle
+        updateDashUI();
+    }
+}
+
+// Stamina'yı güncelle
+function updateStamina(deltaTime) {
+    const deltaSeconds = deltaTime / 1000; // Saniye cinsinden geçen süre
+    
+    if (myPlayer.isRunning && !myPlayer.isStaminaEmpty) {
+        // Koşarken stamina azalt
+        myPlayer.stamina -= STAMINA_DEPLETION_RATE * deltaSeconds;
+        
+        // Stamina bitti mi kontrolü
+        if (myPlayer.stamina <= 0) {
+            myPlayer.stamina = 0;
+            myPlayer.isStaminaEmpty = true; // Stamina boşaldı, koşamaz duruma geldi
+            myPlayer.isRunning = false; // Koşmayı durdur
+        }
+    } else if (!myPlayer.isRunning) {
+        // Koşmuyorsa stamina doldur
+        myPlayer.stamina += STAMINA_RECHARGE_RATE * deltaSeconds;
+        
+        // Stamina maksimuma ulaştı mı kontrolü
+        if (myPlayer.stamina >= MAX_STAMINA) {
+            myPlayer.stamina = MAX_STAMINA;
+            myPlayer.isStaminaEmpty = false; // Stamina doldu, koşabilir duruma geldi
+        } else if (myPlayer.stamina >= MIN_STAMINA_TO_RUN) {
+            // Stamina koşabilecek kadar doldu
+            myPlayer.isStaminaEmpty = false;
+        }
+    }
+    
+    // Stamina UI'ı güncelle
+    updateStaminaUI();
+}
+
+// Dash ses efekti
+function playDashSound() {
+    // Basit bir dash ses efekti oluştur
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.2);
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+        console.log("Ses efekti oluşturulamadı");
+    }
+}
+
+// WebSocket bağlantısı kur
+connectWebSocket();
     </script>
 </body>
 </html>
