@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çok Oyunculu Körebe Oyunu</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #222;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        canvas {
+            display: block;
+            background-color: #111;
+        }
+        
+        #lobby-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 20;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: none;
+        }
+        
+        .lobby-panel {
+            background-color: #333;
+            border-radius: 10px;
+            padding: 20px;
+            width: 80%;
+            max-width: 600px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .room-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+            border: 1px solid #555;
+            border-radius: 5px;
+        }
+        
+        .room-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #444;
+            transition: background-color 0.2s;
+        }
+        
+        .room-item:hover {
+            background-color: #444;
+        }
+        
+        .room-item:last-child {
+            border-bottom: none;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #555;
+            background-color: #222;
+            color: white;
+            font-size: 16px;
+        }
+        
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-success {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .color-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .color-option.selected {
+            border-color: white;
+            box-shadow: 0 0 5px white;
+        }
+        
+        #game-ui {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+        }
+        
+        #player-list {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+            max-width: 200px;
+        }
+        
+        .player-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .player-item.ebe {
+            background-color: rgba(255, 0, 0, 0.3);
+        }
+        
+        .status-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 24px;
+            text-align: center;
+            z-index: 15;
+            display: none;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 10;
+        }
+        
+        /* Sayaç Animasyonu için CSS */
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.5); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        #countdown {
+            animation: pulse 1s infinite;
+            opacity: 0;
+            font-family: 'Impact', sans-serif;
+            font-weight: bold;
+            color: red;
+            text-shadow: 0 0 20px white;
+        }
+        
+        #countdown.show {
+            opacity: 1;
+            animation: pulse 1s infinite, fadeIn 0.5s;
+        }
+        
+        #countdown.hide {
+            opacity: 0;
+            animation: fadeOut 0.5s;
+        }
+        @font-face {
+        font-family: 'Horror';
+        src: url('https://fonts.gstatic.com/s/creepster/v13/AlZy_zVUqJz4yMrniH4Rcn35.woff2') format('woff2');
+        font-weight: normal;
+        font-style: normal;
+    }
+    
+    #blood-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    
+    #blood-canvas {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        z-index: 1001;
+    }
+    
+    #countdown-container {
+        position: relative;
+        z-index: 1002;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+    }
+    
+    #countdown-number {
+        font-family: 'Horror', sans-serif;
+        font-size: 20vw;
+        color: #8a0303;
+        text-shadow: 
+            0 0 20px #ff0000,
+            0 0 30px #600000,
+            0 0 40px #300000;
+        position: relative;
+        opacity: 0;
+        transform: scale(0.5);
+        animation: pulse 1s ease-in-out infinite alternate;
+    }
+    
+    #countdown-splash {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background-size: cover;
+        background-position: center;
+        opacity: 0;
+        z-index: 1003;
+    }
+    
+    /* Kan damlaları */
+    .blood-drop {
+        position: absolute;
+        background-color: #8a0303;
+        border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        transform: rotate(45deg);
+        filter: blur(1px);
+        opacity: 0;
+        z-index: 1001;
+    }
+    
+    @keyframes drip {
+        0% {
+            transform: translateY(0) rotate(45deg) scale(1);
+            opacity: 0.9;
+        }
+        100% {
+            transform: translateY(200px) rotate(45deg) scale(0.7);
+            opacity: 0;
+        }
+    }
+    
+    @keyframes pulse {
+        0% {
+            transform: scale(0.95);
+            text-shadow: 
+                0 0 20px #ff0000,
+                0 0 30px #600000,
+                0 0 40px #300000;
+        }
+        100% {
+            transform: scale(1.05);
+            text-shadow: 
+                0 0 25px #ff0000,
+                0 0 40px #600000,
+                0 0 60px #300000;
+        }
+    }
+    
+    @keyframes splash {
+        0% {
+            opacity: 0.7;
+        }
+        100% {
+            opacity: 0;
+        }
+    }
+    
+    @keyframes appear {
+        0% {
+            opacity: 0;
+            transform: scale(0.5);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    
+    @keyframes disappear {
+        0% {
+            opacity: 1;
+            transform: scale(1);
+        }
+        100% {
+            opacity: 0;
+            transform: scale(1.5);
+        }
+    }
+    
+    /* Kan lekeleri */
+    .blood-stain {
+        position: absolute;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50,5C25,5,5,25,5,50s20,45,45,45s45-20,45-45S75,5,50,5z M85.5,67.5C77.8,82.9,60.9,90,45.5,82.3s-22.5-24.6-14.8-40s24.6-22.5,40-14.8 S93.2,52.1,85.5,67.5z" fill="%238a0303"/></svg>');
+        background-size: contain;
+        background-repeat: no-repeat;
+        opacity: 0.5;
+        z-index: 1002;
+    }
+    
+    /* Kan pıhtıları */
+    .blood-clot {
+        position: absolute;
+        background-color: #5e0101;
+        border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+        transform: rotate(45deg);
+        opacity: 0.7;
+        z-index: 1001;
+    }
+    </style>
+</head>
+<body>
+    <!-- Lobi Ekranı -->
+     <!-- Kan Temalı Geri Sayım Overlay -->
+<div id="blood-overlay" style="display: none;">
+    <canvas id="blood-canvas"></canvas>
+    <div id="countdown-splash"></div>
+    <div id="countdown-container">
+        <div id="countdown-number">3</div>
+    </div>
+</div>
+    <div id="lobby-container">
+        <div class="lobby-panel">
+            <h2>Körebe Oyunu - Lobi</h2>
+            
+            <div class="form-group">
+                <label for="username">Kullanıcı Adı:</label>
+                <input type="text" id="username" placeholder="Adınızı girin">
+            </div>
+            
+            <div class="form-group">
+                <label for="player-color">Renginizi Seçin:</label>
+                <div class="color-selector" id="color-selector">
+                    <div class="color-option selected" style="background-color: blue;" data-color="blue"></div>
+                    <div class="color-option" style="background-color: green;" data-color="green"></div>
+                    <div class="color-option" style="background-color: yellow;" data-color="yellow"></div>
+                    <div class="color-option" style="background-color: purple;" data-color="purple"></div>
+                    <div class="color-option" style="background-color: orange;" data-color="orange"></div>
+                    <div class="color-option" style="background-color: cyan;" data-color="cyan"></div>
+                    <div class="color-option" style="background-color: magenta;" data-color="magenta"></div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button id="refresh-rooms" class="btn btn-primary">Odaları Yenile</button>
+                <button id="create-room" class="btn btn-success">Yeni Oda Oluştur</button>
+            </div>
+            
+            <div class="form-group" id="create-room-panel" style="display: none;">
+                <label for="room-name">Oda Adı:</label>
+                <input type="text" id="room-name" placeholder="Oda adını girin">
+                <button id="create-room-submit" class="btn btn-success">Oluştur</button>
+                <button id="create-room-cancel" class="btn btn-danger">İptal</button>
+            </div>
+            
+            <div class="room-list" id="room-list">
+                <div class="room-item">Odalar yükleniyor...</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Oyun Ekranı -->
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="game-ui">
+            <button id="leave-room" class="btn btn-danger">Odadan Ayrıl</button>
+            <div id="player-status">Durum: <span id="status-text">Oyuncu</span></div>
+        </div>
+        
+        <div id="player-list">
+            <h3>Oyuncular</h3>
+            <div id="players"></div>
+        </div>
+        
+        <div id="status-message" class="status-message"></div>
+        
+        <div class="instructions">
+            <h3>Kontroller</h3>
+            <p>WASD - Hareket etme</p>
+            <p>Shift - Koşu</p>
+            <p>Fare - Bakış Yönü (Mouse ile nereye bakarsanız o yönü görürsünüz)</p>
+            <p>Ebeseniz, yakalamak için oyuncuya bakmalı ve yaklaşmalısınız</p>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elementleri
+        const lobbyContainer = document.getElementById('lobby-container');
+        const gameContainer = document.getElementById('game-container');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const roomList = document.getElementById('room-list');
+        const createRoomBtn = document.getElementById('create-room');
+        const createRoomPanel = document.getElementById('create-room-panel');
+        const createRoomSubmit = document.getElementById('create-room-submit');
+        const createRoomCancel = document.getElementById('create-room-cancel');
+        const refreshRoomsBtn = document.getElementById('refresh-rooms');
+        const leaveRoomBtn = document.getElementById('leave-room');
+        const statusText = document.getElementById('status-text');
+        const playersContainer = document.getElementById('players');
+        const statusMessage = document.getElementById('status-message');
+        const usernameInput = document.getElementById('username');
+        const colorSelector = document.getElementById('color-selector');
+        
+        // Canvas boyutlandırma
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Oyun değişkenleri
+        let socket;
+        let clientId;
+        let currentRoomId;
+        let players = {};
+        let footprints = [];
+        let obstacles = [];
+        let isEbe = false;
+        let myColor = 'blue';
+        let mouseX = 0;
+        let mouseY = 0;
+        let lastTime = 0;
+        let isFreezed = false;  // Donmuş durumda mı?
+
+        // Oyuncu nesnesi
+        const myPlayer = {
+            x: 0,
+            y: 0,
+            angle: 0,
+            size: 20,
+            speed: 4,
+            isRunning: false,
+            lastFootprintPos: { x: 0, y: 0 },
+            footprintDistance: 0
+        };
+
+        // Sabitler
+        const PLAYER_SIZE = 15;
+        const VIEW_ANGLE = 60;
+        const VIEW_DISTANCE = 200;
+        const FOOTPRINT_DETECTION_DISTANCE = 150;
+        const FOOTPRINT_DURATION = 1000;
+        const FOOTPRINT_INTERVAL = 30;
+        const CATCH_DISTANCE = 40;
+        
+        // Klavye kontrolleri
+        const keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false,
+            shift: false
+        };
+        
+        // Renk seçici
+        const colorOptions = colorSelector.querySelectorAll('.color-option');
+        colorOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                colorOptions.forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
+                myColor = option.getAttribute('data-color');
+            });
+        });
+        
+        // WebSocket Bağlantısı
+        // WebSocket Bağlantısı
+
+
+// Kan animasyonu değişkenleri
+let bloodCanvas;
+let bloodCtx;
+let bloodOverlay;
+let countdownNumber;
+let countdownSplash;
+
+// Kan pozları (parlak ve koyu kırmızı renkler)
+const bloodColors = [
+    '#8a0303', // Koyu kan kırmızısı
+    '#a81616', // Orta kırmızı
+    '#770000', // Çok koyu
+    '#c22121', // Parlak kan
+    '#5e0101'  // Pıhtılaşmış kan
+];
+
+// Kan elementlerini hazırla
+function initBloodElements() {
+    // HTML'i body'e ekle
+    const bloodOverlayContainer = document.createElement('div');
+    bloodOverlayContainer.innerHTML = bloodOverlayHTML;
+    document.body.appendChild(bloodOverlayContainer.firstElementChild);
+    
+    // CSS'i head'e ekle
+    const bloodStyle = document.createElement('style');
+    bloodStyle.textContent = bloodOverlayCSS;
+    document.head.appendChild(bloodStyle);
+    
+    // Elementleri seç
+    bloodCanvas = document.getElementById('blood-canvas');
+    bloodCtx = bloodCanvas.getContext('2d');
+    bloodOverlay = document.getElementById('blood-overlay');
+    countdownNumber = document.getElementById('countdown-number');
+    countdownSplash = document.getElementById('countdown-splash');
+    
+    // Canvas boyutlandırma
+    bloodCanvas.width = window.innerWidth;
+    bloodCanvas.height = window.innerHeight;
+    
+    // Pencere boyutu değiştiğinde canvas boyutunu güncelle
+    window.addEventListener('resize', () => {
+        bloodCanvas.width = window.innerWidth;
+        bloodCanvas.height = window.innerHeight;
+    });
+}
+
+// Kan damlası, kan lekesi ve pıhtı oluşturma
+function createBloodElements() {
+    // Kan damlaları oluştur
+    for (let i = 0; i < 15; i++) {
+        createBloodDrop();
+    }
+    
+    // Kan lekeleri oluştur
+    for (let i = 0; i < 10; i++) {
+        createBloodStain();
+    }
+    
+    // Kan pıhtıları oluştur
+    for (let i = 0; i < 8; i++) {
+        createBloodClot();
+    }
+}
+
+// Kan damlası oluştur
+function createBloodDrop() {
+    const drop = document.createElement('div');
+    drop.className = 'blood-drop';
+    
+    // Rastgele boyut ve pozisyon
+    const size = 5 + Math.random() * 15;
+    const left = Math.random() * window.innerWidth;
+    const top = -50 + Math.random() * 150; // Ekranın üst kısmında başla
+    
+    drop.style.width = `${size}px`;
+    drop.style.height = `${size * 1.5}px`;
+    drop.style.left = `${left}px`;
+    drop.style.top = `${top}px`;
+    drop.style.backgroundColor = bloodColors[Math.floor(Math.random() * bloodColors.length)];
+    
+    // Animasyon
+    drop.style.animation = `drip ${1 + Math.random() * 4}s linear ${Math.random() * 3}s`;
+    
+    // Ekrana ekle
+    bloodOverlay.appendChild(drop);
+    
+    // Animasyon bitince sil
+    drop.addEventListener('animationend', () => {
+        drop.remove();
+        // Yeni damla oluştur
+        if (bloodOverlay.style.display !== 'none') {
+            createBloodDrop();
+        }
+    });
+}
+
+// Kan lekesi oluştur
+function createBloodStain() {
+    const stain = document.createElement('div');
+    stain.className = 'blood-stain';
+    
+    // Rastgele boyut, pozisyon ve rotasyon
+    const size = 30 + Math.random() * 100;
+    const left = Math.random() * window.innerWidth;
+    const top = Math.random() * window.innerHeight;
+    const rotation = Math.random() * 360;
+    
+    stain.style.width = `${size}px`;
+    stain.style.height = `${size}px`;
+    stain.style.left = `${left}px`;
+    stain.style.top = `${top}px`;
+    stain.style.transform = `rotate(${rotation}deg)`;
+    stain.style.opacity = 0.1 + Math.random() * 0.4;
+    
+    // Ekrana ekle
+    bloodOverlay.appendChild(stain);
+    
+    // 8-12 saniye sonra sil
+    setTimeout(() => {
+        if (stain.parentNode) {
+            stain.remove();
+        }
+    }, 8000 + Math.random() * 4000);
+}
+
+// Kan pıhtısı oluştur
+function createBloodClot() {
+    const clot = document.createElement('div');
+    clot.className = 'blood-clot';
+    
+    // Rastgele boyut, pozisyon ve rotasyon
+    const size = 10 + Math.random() * 30;
+    const left = Math.random() * window.innerWidth;
+    const top = Math.random() * window.innerHeight;
+    const rotation = Math.random() * 360;
+    
+    clot.style.width = `${size}px`;
+    clot.style.height = `${size}px`;
+    clot.style.left = `${left}px`;
+    clot.style.top = `${top}px`;
+    clot.style.transform = `rotate(${rotation}deg)`;
+    clot.style.opacity = 0.3 + Math.random() * 0.4;
+    
+    // Ekrana ekle
+    bloodOverlay.appendChild(clot);
+    
+    // 5-10 saniye sonra sil
+    setTimeout(() => {
+        if (clot.parentNode) {
+            clot.remove();
+        }
+    }, 5000 + Math.random() * 5000);
+}
+
+// Canvas üzerinde kan sıçraması çiz
+function drawBloodSplash() {
+    bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
+    
+    // Rastgele kan sıçramaları
+    for (let i = 0; i < 20; i++) {
+        const x = Math.random() * bloodCanvas.width;
+        const y = Math.random() * bloodCanvas.height;
+        
+        // Rastgele yön ve uzunlukta kan sıçramaları
+        const angle = Math.random() * Math.PI * 2;
+        const length = 20 + Math.random() * 100;
+        const endX = x + Math.cos(angle) * length;
+        const endY = y + Math.sin(angle) * length;
+        
+        // Kan rengi
+        bloodCtx.strokeStyle = bloodColors[Math.floor(Math.random() * bloodColors.length)];
+        bloodCtx.lineWidth = 2 + Math.random() * 8;
+        
+        // Çizgi çiz
+        bloodCtx.beginPath();
+        bloodCtx.moveTo(x, y);
+        
+        // Kavisli kan sıçraması
+        const controlX = x + Math.cos(angle + Math.PI/4) * length * 0.7;
+        const controlY = y + Math.sin(angle + Math.PI/4) * length * 0.7;
+        bloodCtx.quadraticCurveTo(controlX, controlY, endX, endY);
+        bloodCtx.stroke();
+        
+        // Kan damlası ekle
+        bloodCtx.fillStyle = bloodCtx.strokeStyle;
+        bloodCtx.beginPath();
+        bloodCtx.arc(endX, endY, bloodCtx.lineWidth * 0.8, 0, Math.PI * 2);
+        bloodCtx.fill();
+    }
+}
+
+// Sayıyı görüntüle ve animasyonu başlat
+function showNumber(number) {
+    countdownNumber.textContent = number;
+    countdownNumber.style.opacity = '0';
+    countdownNumber.style.animation = 'none';
+    
+    // Yeni renk tonu
+    const hue = 0; // Kırmızı
+    const lightness = 30 + Math.random() * 15; // Parlaklık
+    countdownNumber.style.color = `hsl(${hue}, 100%, ${lightness}%)`;
+    
+    // Görünme animasyonu
+    setTimeout(() => {
+        countdownNumber.style.opacity = '1';
+        countdownNumber.style.animation = 'pulse 1s infinite alternate';
+        countdownNumber.style.transition = 'opacity 0.5s, transform 0.5s';
+        countdownNumber.style.transform = 'scale(1)';
+        
+        // Kan sıçraması efekti
+        drawBloodSplash();
+        
+        // Kan sıçrama animasyonu
+        countdownSplash.style.opacity = '0.7';
+        countdownSplash.style.animation = 'splash 1s';
+    }, 100);
+}
+
+// Kanlı geri sayım animasyonu
+function startBloodCountdown(totalSeconds, onComplete) {
+    // Overlay'i görünür yap
+    bloodOverlay.style.display = 'flex';
+    
+    // Kan elementleri oluştur
+    createBloodElements();
+    
+    // İlk sayıyı göster
+    let currentSecond = totalSeconds;
+    showNumber(currentSecond);
+    
+    // Geri sayım intervali
+    const countdownInterval = setInterval(() => {
+        currentSecond--;
+        
+        if (currentSecond > 0) {
+            // Kaybolma animasyonu
+            countdownNumber.style.opacity = '0';
+            countdownNumber.style.transform = 'scale(1.5)';
+            
+            // Kısa bir gecikme sonrası yeni sayıyı göster
+            setTimeout(() => {
+                showNumber(currentSecond);
+            }, 500);
+        } else {
+            // Geri sayım bitti
+            clearInterval(countdownInterval);
+            
+            // Son sayı kaybolsun
+            countdownNumber.style.opacity = '0';
+            countdownNumber.style.transform = 'scale(1.5)';
+            
+            // Geri sayım bittiğinde overlay'i kapat
+            setTimeout(() => {
+                bloodOverlay.style.display = 'none';
+                
+                // Kan elementlerini temizle
+                const bloodElements = bloodOverlay.querySelectorAll('.blood-drop, .blood-stain, .blood-clot');
+                bloodElements.forEach(element => element.remove());
+                
+                // Canvas temizle
+                bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
+                
+                // Tamamlandı callback
+                if (onComplete) onComplete();
+            }, 1000);
+        }
+    }, 1000);
+}
+
+
+// Mevcut startEbeCountdown fonksiyonunu değiştirin
+function startEbeCountdown() {
+    const bloodOverlay = document.getElementById('blood-overlay');
+    const countdownNumber = document.getElementById('countdown-number');
+    const bloodCanvas = document.getElementById('blood-canvas');
+    
+    // Donmuş duruma geç
+    isFreezed = true;
+    
+    // Overlay'i görünür yap
+    bloodOverlay.style.display = 'flex';
+    
+    // Canvas boyutlarını ayarla
+    bloodCanvas.width = window.innerWidth;
+    bloodCanvas.height = window.innerHeight;
+    
+    // Kan elementleri oluştur
+    createBloodElements();
+    
+    // İlk sayıyı göster
+    let currentSecond = 3;
+    showBloodNumber(currentSecond);
+    
+    // Geri sayım intervali
+    const countdownInterval = setInterval(() => {
+        currentSecond--;
+        
+        if (currentSecond > 0) {
+            // Kaybolma animasyonu
+            countdownNumber.style.opacity = '0';
+            countdownNumber.style.transform = 'scale(1.5)';
+            
+            // Kısa bir gecikme sonrası yeni sayıyı göster
+            setTimeout(() => {
+                showBloodNumber(currentSecond);
+            }, 500);
+        } else {
+            // Geri sayım bitti
+            clearInterval(countdownInterval);
+            
+            // Son sayı kaybolsun
+            countdownNumber.style.opacity = '0';
+            countdownNumber.style.transform = 'scale(1.5)';
+            
+            // Geri sayım bittiğinde overlay'i kapat
+            setTimeout(() => {
+                bloodOverlay.style.display = 'none';
+                
+                // Donmuş durumdan çık
+                isFreezed = false;
+                
+                // Kan elementlerini temizle
+                const bloodElements = bloodOverlay.querySelectorAll('.blood-drop, .blood-stain, .blood-clot');
+                bloodElements.forEach(element => element.remove());
+                
+                // Canvas temizle
+                const bloodCtx = bloodCanvas.getContext('2d');
+                bloodCtx.clearRect(0, 0, bloodCanvas.width, bloodCanvas.height);
+            }, 1000);
+        }
+    }, 1000);
+}
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    
+    socket = new WebSocket(wsUrl);
+    
+    socket.onopen = function() {
+        console.log('WebSocket bağlantısı kuruldu');
+        refreshRooms();
+    };
+    
+    socket.onmessage = function(event) {
+        try {
+            const message = JSON.parse(event.data);
+            
+            switch(message.type) {
+                case 'connected':
+                    clientId = message.clientId;
+                    console.log('Bağlantı ID:', clientId);
+                    break;
+                    
+                case 'room_list':
+                    updateRoomList(message.rooms);
+                    break;
+                    
+                case 'room_created':
+                    currentRoomId = message.roomId;
+                    joinRoom(currentRoomId);
+                    break;
+                    
+                case 'room_joined':
+                    currentRoomId = message.roomId;
+                    isEbe = message.isEbe;
+                    
+                    // Diğer oyuncuları ekle
+                    players = {};
+                    message.players.forEach(player => {
+                        if (player.id !== clientId) {
+                            players[player.id] = player;
+                        }
+                    });
+                    
+                    // Oyuna başla
+                    startGame();
+                    updatePlayerList();
+                    break;
+                    
+                case 'player_joined':
+                    // Yeni oyuncu ekle
+                    if (message.player.id !== clientId) {
+                        players[message.player.id] = message.player;
+                        updatePlayerList();
+                    }
+                    break;
+                    
+                case 'player_left':
+                    // Oyuncuyu kaldır
+                    if (players[message.clientId]) {
+                        delete players[message.clientId];
+                        updatePlayerList();
+                    }
+                    break;
+                    
+                case 'player_position':
+                    // Diğer oyuncuların pozisyonlarını güncelle
+                    if (players[message.id]) {
+                        players[message.id].x = message.x;
+                        players[message.id].y = message.y;
+                        players[message.id].angle = message.angle;
+                        players[message.id].isRunning = message.isRunning;
+                    }
+                    break;
+                    
+                case 'footprint_created':
+                    // Diğer oyuncuların ayak izlerini ekle
+                    footprints.push(message.footprint);
+                    break;
+                    
+                // case 'new_ebe' kısmını şu şekilde değiştirin:
+                case 'new_ebe':
+                    // Ebe değişimi
+                const wasEbe = isEbe; // Daha önce ebe miydim?
+                isEbe = (message.ebeId === clientId);
+
+                // Oyuncu durumlarını güncelle
+                Object.keys(players).forEach(id => {
+                    players[id].isEbe = (id === message.ebeId);
+                });
+
+                updatePlayerList();
+                updateStatus();
+
+                // Ebe değişim mesajı
+                if (message.ebeId === clientId && !wasEbe) {
+                    // Kanlı geri sayım animasyonu başlat
+                    startBloodCountdown(3, () => {
+                        isFreezed = false;
+                    });
+
+                    showStatusMessage('Şimdi EBE sensin!');
+                } else if (message.ebeId !== clientId) {
+                    const newEbeName = players[message.ebeId] ? players[message.ebeId].username : 'Başka bir oyuncu';
+                    showStatusMessage(`${newEbeName} ebe oldu!`);
+                }
+                break;
+                    
+                case 'game_started':
+                    // Oyun başladı
+                    startGame();
+                    break;
+                    
+                case 'error':
+                    alert(`Hata: ${message.message}`);
+                    break;
+            }
+        } catch (error) {
+            console.error("Mesaj işleme hatası:", error);
+        }
+    };
+    
+    socket.onclose = function() {
+        console.log('WebSocket bağlantısı kapandı');
+        showLobby();
+        alert('Sunucu bağlantısı kesildi. Sayfayı yenileyerek tekrar bağlanabilirsiniz.');
+    };
+    
+    socket.onerror = function(error) {
+        console.error('WebSocket hatası:', error);
+    };
+}
+        
+        // Yeni geri sayım sistemi
+        function startEbeCountdown() {
+            // Aktif bir zamanlayıcı varsa önce onu temizle
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+            
+            // DOM elementleri kontrol et
+            if (!countdownContainer || !countdownNumber) {
+                console.error("Geri sayım elementleri bulunamadı!");
+                return;
+            }
+            
+            // Donmuş duruma geç
+            isFreezed = true;
+            
+            // Başlangıç değeri
+            let currentSecond = 3;
+            countdownNumber.textContent = currentSecond;
+            countdownNumber.style.color = "red";
+            
+            // Geri sayım panelini göster
+            countdownContainer.style.display = "block";
+            
+            // Zamanlayıcıyı başlat
+            countdownTimer = setInterval(() => {
+                currentSecond--;
+                
+                // Renk değişimi
+                if (currentSecond === 2) {
+                    countdownNumber.style.color = "orange";
+                } else if (currentSecond === 1) {
+                    countdownNumber.style.color = "green";
+                }
+                
+                // Sayıyı güncelle
+                countdownNumber.textContent = currentSecond;
+                
+                // Geri sayım bitti mi?
+                if (currentSecond <= 0) {
+                    // Zamanlayıcıyı durdur
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                    
+                    // Paneli gizle
+                    countdownContainer.style.display = "none";
+                    
+                    // Donmuş durumdan çık
+                    isFreezed = false;
+                }
+            }, 1000);
+        }
+        
+        // Geri sayım ekranını güncelle
+        function updateCountdownDisplay(show, secondsLeft = 0) {
+            // DOM elementi yoksa hata oluşmasını önle
+            if (!countdownElement) {
+                console.warn("Sayaç elementi bulunamadı!");
+                return;
+            }
+            
+            if (show) {
+                countdownElement.textContent = secondsLeft;
+                countdownElement.style.display = 'block';
+                countdownElement.className = 'show';
+                
+                // Büyüklük değişimi etkisi
+                const scale = secondsLeft > 2 ? 1 : (secondsLeft > 1 ? 1.3 : 1.6);
+                countdownElement.style.transform = `translate(-50%, -50%) scale(${scale})`;
+                
+                // Renk değişimi etkisi
+                const colors = ['red', 'orange', 'green'];
+                countdownElement.style.color = colors[3 - secondsLeft];
+                
+                // Arka plan efekti
+                if (gameContainer) {
+                    gameContainer.style.boxShadow = `inset 0 0 ${50 * (4 - secondsLeft)}px ${colors[3 - secondsLeft]}`;
+                }
+            } else {
+                if (countdownElement.className) {
+                    countdownElement.className = 'hide';
+                    setTimeout(() => {
+                        countdownElement.style.display = 'none';
+                        if (gameContainer) {
+                            gameContainer.style.boxShadow = 'none';
+                        }
+                    }, 500);
+                }
+            }
+        }
+
+        // Oda listesini güncelle
+        function updateRoomList(rooms) {
+            if (rooms.length === 0) {
+                roomList.innerHTML = '<div class="room-item">Hiç oda yok. Yeni bir oda oluşturun!</div>';
+                return;
+            }
+            
+            roomList.innerHTML = '';
+            rooms.forEach(room => {
+                const roomItem = document.createElement('div');
+                roomItem.className = 'room-item';
+                roomItem.innerHTML = `
+                    <strong>${room.name}</strong>
+                    <div>Oyuncular: ${room.playerCount}</div>
+                    <div>Durum: ${room.gameStarted ? 'Oyun başladı' : 'Bekliyor'}</div>
+                `;
+                
+                roomItem.addEventListener('click', () => {
+                    joinRoom(room.id);
+                });
+                
+                roomList.appendChild(roomItem);
+            });
+        }
+        
+        // Oyuncu listesini güncelle
+        function updatePlayerList() {
+            playersContainer.innerHTML = '';
+            
+            // Kendimi ekle
+            const myItem = document.createElement('div');
+            myItem.className = `player-item ${isEbe ? 'ebe' : ''}`;
+            myItem.innerHTML = `<strong>${usernameInput.value || 'Ben'}</strong> ${isEbe ? '(EBE)' : ''}`;
+            playersContainer.appendChild(myItem);
+            
+            // Diğer oyuncuları ekle
+            Object.values(players).forEach(player => {
+                const playerItem = document.createElement('div');
+                playerItem.className = `player-item ${player.isEbe ? 'ebe' : ''}`;
+                playerItem.innerHTML = `<strong>${player.username}</strong> ${player.isEbe ? '(EBE)' : ''}`;
+                playersContainer.appendChild(playerItem);
+            });
+        }
+        
+        // Durumu güncelle
+        function updateStatus() {
+            statusText.textContent = isEbe ? 'EBE' : 'Oyuncu';
+            statusText.style.color = isEbe ? 'red' : 'white';
+        }
+        
+        // Durum mesajı göster
+        function showStatusMessage(text, duration = 3000) {
+            if (!statusMessage) {
+                console.warn("Durum mesajı elementi bulunamadı!");
+                return;
+            }
+            
+            statusMessage.textContent = text;
+            statusMessage.style.display = 'block';
+            
+            setTimeout(() => {
+                if (statusMessage) {
+                    statusMessage.style.display = 'none';
+                }
+            }, duration);
+        }
+
+        // Oda listesini güncelle
+        
+        // Odaları güncelle
+        function refreshRooms() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'list_rooms'
+                }));
+            }
+        }
+        
+        // Oda oluştur
+        function createRoom() {
+            if (!usernameInput.value.trim()) {
+                alert('Lütfen bir kullanıcı adı girin!');
+                return;
+            }
+            
+            const roomName = document.getElementById('room-name').value.trim() || `${usernameInput.value}'in Odası`;
+            
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'create_room',
+                    roomName: roomName
+                }));
+            }
+            
+            createRoomPanel.style.display = 'none';
+        }
+        
+        // Odaya katıl
+        function joinRoom(roomId) {
+            if (!usernameInput.value.trim()) {
+                alert('Lütfen bir kullanıcı adı girin!');
+                return;
+            }
+            
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'join_room',
+                    roomId: roomId,
+                    username: usernameInput.value,
+                    color: myColor
+                }));
+            }
+        }
+        
+        // Odadan ayrıl
+        function leaveRoom() {
+            showLobby();
+            currentRoomId = null;
+            players = {};
+            footprints = [];
+            
+            // Oyunu durdur
+            cancelAnimationFrame(gameLoop);
+        }
+        
+        // Lobi ekranını göster
+        function showLobby() {
+            lobbyContainer.style.display = 'flex';
+            gameContainer.style.display = 'none';
+            refreshRooms();
+        }
+        
+        // Startgame fonksiyonuna isFreezed'i sıfırlama ekle
+        function startGame() {
+            lobbyContainer.style.display = 'none';
+            gameContainer.style.display = 'block';
+            
+            // Rastgele başlangıç konumu
+            myPlayer.x = Math.random() * canvas.width;
+            myPlayer.y = Math.random() * canvas.height;
+            myPlayer.lastFootprintPos.x = myPlayer.x;
+            myPlayer.lastFootprintPos.y = myPlayer.y;
+            
+            // Engeller oluştur
+            createObstacles();
+            
+            // Durum göstergesini güncelle
+            updateStatus();
+            
+            // Donma durumunu sıfırla
+            isFreezed = false;
+            
+            // Ebe mesajı
+            if (isEbe) {
+                showStatusMessage('Sen EBEsin! Diğer oyuncuları yakala!');
+            }
+            
+            // Oyun döngüsünü başlat
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Rastgele engeller oluştur
+        function createObstacles() {
+            obstacles = [];
+            const obstacleCount = 5;
+            
+            for (let i = 0; i < obstacleCount; i++) {
+                obstacles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    width: 50 + Math.random() * 100,
+                    height: 50 + Math.random() * 100,
+                    color: '#555'
+                });
+            }
+        }
+        
+        // Ayak izi oluştur
+        function createFootprint() {
+            const footprint = {
+                x: myPlayer.x,
+                y: myPlayer.y,
+                angle: myPlayer.angle,
+                size: 6,
+                color: 'red',
+                alpha: 1.0,
+                creationTime: Date.now(),
+                maxLifetime: FOOTPRINT_DURATION,
+                isFromRunning: myPlayer.isRunning // Koşarak mı bırakıldı?
+            };
+            
+            footprints.push(footprint);
+            
+            // Sunucuya bildir
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'footprint_created',
+                    footprint: footprint
+                }));
+            }
+        }
+        
+        // Oyun döngüsü
+        function gameLoop(timestamp) {
+            // Hata ayıklama için güvenlik kontrolü
+            if (!canvas) {
+                console.error("Canvas elementi bulunamadı!");
+                return;
+            }
+            
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            try {
+                // Oyuncuyu güncelle
+                updatePlayer(deltaTime);
+                
+                // Ayak izlerini güncelle
+                updateFootprints();
+                
+                // Yakalama kontrolü
+                if (isEbe && !isFreezed) {
+                    checkCatchPlayers();
+                }
+                
+                // Siyah ekran çiz (her şey görünmez)
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Çiz - Sadece görüş açısı içinde görünür
+                draw();
+                
+                // Eğer ebe donmuş durumdaysa sayaç bilgisini çiz
+                if (isEbe && isFreezed) {
+                    drawFreezeCountdown();
+                }
+                
+                // Pozisyon güncellemesi gönder
+                sendPositionUpdate();
+                
+                requestAnimationFrame(gameLoop);
+            } catch (e) {
+                console.error("Oyun döngüsünde hata:", e);
+                requestAnimationFrame(gameLoop); // Hata olsa bile devam et
+            }
+        }
+        
+        // Donma süresi görsel geri bildirimi
+        function drawFreezeCountdown() {
+            ctx.save();
+            
+            // Yarı saydam kırmızı ekran efekti
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Sayaç mesajını göster
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('EBE HAZlRLANlYOR...', canvas.width / 2, canvas.height / 2);
+            
+            ctx.restore();
+        }
+        
+        // Pozisyon güncellemesi gönder
+        function sendPositionUpdate() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'player_update',
+                    x: myPlayer.x,
+                    y: myPlayer.y,
+                    angle: myPlayer.angle,
+                    isRunning: myPlayer.isRunning
+                }));
+            }
+        }
+        
+        // İki nokta arasındaki mesafeyi hesapla
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+        
+        // Oyuncu pozisyonunu güncelle
+        function updatePlayer(deltaTime) {
+            // Eğer oyuncu donmuş durumdaysa hareket etmesin
+            if (isFreezed) {
+                return; // Hareketi engelle
+            }
+            
+            // Klavye kontrolü (sadece hareket için)
+            let dx = 0;
+            let dy = 0;
+            
+            if (keys.w) dy -= 1;
+            if (keys.s) dy += 1;
+            if (keys.a) dx -= 1;
+            if (keys.d) dx += 1;
+            
+            // Normalleştirme
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.7071;
+                dy *= 0.7071;
+            }
+            
+            // Koşma durumu
+            myPlayer.isRunning = keys.shift;
+            const speed = myPlayer.isRunning ? myPlayer.speed * 1.5 : myPlayer.speed;
+            
+            // Yeni pozisyon - sadece WASD ile hareket
+            const newX = myPlayer.x + dx * speed;
+            const newY = myPlayer.y + dy * speed;
+            
+            // Sınır kontrolü
+            if (newX > PLAYER_SIZE && newX < canvas.width - PLAYER_SIZE) {
+                myPlayer.x = newX;
+            }
+            if (newY > PLAYER_SIZE && newY < canvas.height - PLAYER_SIZE) {
+                myPlayer.y = newY;
+            }
+            
+            // Fare ile bakış açısı kontrolü - hareket yönünden bağımsız
+            const mX = mouseX - myPlayer.x;
+            const mY = mouseY - myPlayer.y;
+            myPlayer.angle = Math.atan2(mY, mX);
+            
+            // Ayak izi oluşturma kontrolü
+            if (dx !== 0 || dy !== 0) {
+                const distMoved = distance(myPlayer.x, myPlayer.y, myPlayer.lastFootprintPos.x, myPlayer.lastFootprintPos.y);
+                myPlayer.footprintDistance += distMoved;
+                
+                if (myPlayer.footprintDistance >= FOOTPRINT_INTERVAL) {
+                    myPlayer.footprintDistance = 0;
+                    myPlayer.lastFootprintPos.x = myPlayer.x;
+                    myPlayer.lastFootprintPos.y = myPlayer.y;
+                    
+                    // Ebe değilse ayak izi bırak
+                    if (!isEbe) {
+                        createFootprint();
+                    }
+                }
+            }
+        }
+        
+        // Ayak izlerini güncelle
+        function updateFootprints() {
+            const currentTime = Date.now();
+            
+            footprints = footprints.filter(footprint => {
+                const age = currentTime - footprint.creationTime;
+                return age < footprint.maxLifetime;
+            });
+            
+            // Her bir ayak izinin rengini ve şeffaflığını güncelle
+            for (const footprint of footprints) {
+                const age = currentTime - footprint.creationTime;
+                const colorRatio = Math.min(age / 300, 1);
+                
+                // Kırmızıdan beyaza geçiş
+                const r = 255;
+                const g = Math.floor(255 * colorRatio);
+                const b = Math.floor(255 * colorRatio);
+                
+                // Zamanla şeffaflaşma
+                const alphaRatio = 1 - (age / footprint.maxLifetime);
+                const alpha = Math.max(0, alphaRatio);
+                
+                footprint.color = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                footprint.alpha = alpha;
+            }
+        }
+        
+        // Yakalama kontrolü
+        function checkCatchPlayers() {
+            // Donma durumundaysa yakalama yapılamaz
+            if (isFreezed) return;
+            
+            Object.keys(players).forEach(playerId => {
+                const player = players[playerId];
+                
+                // Oyuncu zaten ebe değilse
+                if (!player.isEbe) {
+                    const dist = distance(myPlayer.x, myPlayer.y, player.x, player.y);
+                    
+                    // Görüş açısı kontrolü
+                    const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
+                    
+                    // Sadece görüş açısındaki oyuncuları yakalayabilir
+                    if (dist < CATCH_DISTANCE && inViewAngle) {
+                        // Oyuncuyu yakala!
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: 'catch_player',
+                                caughtPlayerId: playerId
+                            }));
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Açıda olup olmadığını kontrol et
+        function isInAngle(centerX, centerY, targetX, targetY, angle, viewAngle) {
+            const dx = targetX - centerX;
+            const dy = targetY - centerY;
+            
+            let targetAngle = Math.atan2(dy, dx);
+            if (targetAngle < 0) targetAngle += Math.PI * 2;
+            if (angle < 0) angle += Math.PI * 2;
+            
+            const halfViewAngle = (viewAngle * Math.PI / 180) / 2;
+            const lowerBound = angle - halfViewAngle;
+            const upperBound = angle + halfViewAngle;
+            
+            if (lowerBound < 0) {
+                return targetAngle > (lowerBound + Math.PI * 2) || targetAngle < upperBound;
+            }
+            if (upperBound > Math.PI * 2) {
+                return targetAngle < (upperBound - Math.PI * 2) || targetAngle > lowerBound;
+            }
+            
+            return targetAngle > lowerBound && targetAngle < upperBound;
+        }
+        
+        // Ebe görüş açısını çiz
+        function drawEbeView(player, isCurrentPlayer) {
+            const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
+            
+            ctx.save();
+            ctx.globalAlpha = 0.2;
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y);
+            ctx.arc(player.x, player.y, VIEW_DISTANCE, player.angle - halfViewAngle, player.angle + halfViewAngle);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+        
+        // Oyuncuları çiz
+        function drawPlayers() {
+            // Önce diğer oyuncuları çiz
+            Object.values(players).forEach(player => {
+                let visible = true;
+                
+                // Ebe için görüş kontrolü
+                if (isEbe) {
+                    // Görüş açısı içinde olup olmadığını kontrol et
+                    const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
+                    const inViewDistance = distance(myPlayer.x, myPlayer.y, player.x, player.y) < VIEW_DISTANCE;
+                    
+                    // Ebe sadece görüş açısında ve mesafesi içindeyse görsün
+                    visible = inViewAngle && inViewDistance;
+                }
+                
+                if (visible) {
+                    ctx.save();
+                    ctx.translate(player.x, player.y);
+                    ctx.rotate(player.angle);
+                    
+                    // Oyuncu çizimi
+                    ctx.fillStyle = player.isEbe ? 'red' : player.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Koşma göstergesi
+                    if (player.isRunning) {
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, PLAYER_SIZE + 3, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    // Yön göstergesi
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.moveTo(PLAYER_SIZE, 0);
+                    ctx.lineTo(PLAYER_SIZE - 5, -3);
+                    ctx.lineTo(PLAYER_SIZE - 5, 3);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Kullanıcı adı
+                    ctx.fillStyle = 'white';
+                    ctx.textAlign = 'center';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(player.username, 0, -PLAYER_SIZE - 5);
+                    
+                    ctx.restore();
+                    
+                    // Ebe görüş açısı
+                    if (player.isEbe) {
+                        drawEbeView(player, false);
+                    }
+                }
+            });
+            
+            // Kendimi çiz
+            ctx.save();
+            ctx.translate(myPlayer.x, myPlayer.y);
+            ctx.rotate(myPlayer.angle);
+            
+            // Oyuncu çizimi
+            ctx.fillStyle = isEbe ? 'red' : myColor;
+            ctx.beginPath();
+            ctx.arc(0, 0, PLAYER_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Koşma göstergesi
+            if (myPlayer.isRunning) {
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, PLAYER_SIZE + 3, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            // Yön göstergesi
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(PLAYER_SIZE, 0);
+            ctx.lineTo(PLAYER_SIZE - 5, -3);
+            ctx.lineTo(PLAYER_SIZE - 5, 3);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Kullanıcı adı
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.font = '12px Arial';
+            ctx.fillText(usernameInput.value || 'Ben', 0, -PLAYER_SIZE - 5);
+            
+            ctx.restore();
+            
+            // Ebe görüş açısı
+            if (isEbe) {
+                drawEbeView(myPlayer, true);
+            }
+        }
+        
+        // Ayak izlerini çiz
+        function drawFootprints() {
+            footprints.forEach(footprint => {
+                // Ebeysem ve belirli koşullar sağlanıyorsa ayak izlerini göster
+                if (!isEbe) return;
+                
+                const dist = distance(myPlayer.x, myPlayer.y, footprint.x, footprint.y);
+                const isNearby = dist < FOOTPRINT_DETECTION_DISTANCE;
+                const isFromRunningPlayer = footprint.isFromRunning;
+                
+                // Sadece yakın mesafedeki veya koşan oyuncuların ayak izlerini göster
+                if (!isNearby && !isFromRunningPlayer) return;
+                
+                ctx.save();
+                ctx.translate(footprint.x, footprint.y);
+                ctx.rotate(footprint.angle);
+                
+                // Ayak izini çiz
+                ctx.fillStyle = footprint.color;
+                
+                // Sol-sağ ayak izi alternatifi
+                const isLeft = Math.floor(footprint.x + footprint.y) % 2 === 0;
+                
+                // Gerçekçi ayak izi şekli
+                if (isLeft) {
+                    // Sol ayak
+                    ctx.beginPath();
+                    // Topuk kısmı
+                    ctx.ellipse(-2, 5, footprint.size * 0.8, footprint.size, 0, 0, Math.PI * 2);
+                    // Ayak tabanı
+                    ctx.moveTo(-3, 0);
+                    ctx.bezierCurveTo(
+                        -4, -5,  // Kontrol noktası 1
+                        0, -10,  // Kontrol noktası 2
+                        2, -12   // Bitiş noktası
+                    );
+                    // Ayak parmakları
+                    ctx.moveTo(1, -11);
+                    ctx.arc(1, -11, footprint.size * 0.4, 0, Math.PI, true);  // Büyük parmak
+                    ctx.moveTo(0, -10);
+                    ctx.arc(0, -10, footprint.size * 0.3, 0, Math.PI, true);  // 2. parmak
+                    ctx.moveTo(-1, -9);
+                    ctx.arc(-1, -9, footprint.size * 0.25, 0, Math.PI, true); // 3. parmak
+                    ctx.moveTo(-2, -8);
+                    ctx.arc(-2, -8, footprint.size * 0.2, 0, Math.PI, true);  // 4. parmak
+                    ctx.moveTo(-3, -7);
+                    ctx.arc(-3, -7, footprint.size * 0.15, 0, Math.PI, true); // Küçük parmak
+                    ctx.fill();
+                } else {
+                    // Sağ ayak
+                    ctx.beginPath();
+                    // Topuk kısmı
+                    ctx.ellipse(2, 5, footprint.size * 0.8, footprint.size, 0, 0, Math.PI * 2);
+                    // Ayak tabanı
+                    ctx.moveTo(3, 0);
+                    ctx.bezierCurveTo(
+                        4, -5,   // Kontrol noktası 1
+                        0, -10,  // Kontrol noktası 2
+                        -2, -12  // Bitiş noktası
+                    );
+                    // Ayak parmakları
+                    ctx.moveTo(-1, -11);
+                    ctx.arc(-1, -11, footprint.size * 0.4, 0, Math.PI, true);  // Büyük parmak
+                    ctx.moveTo(0, -10);
+                    ctx.arc(0, -10, footprint.size * 0.3, 0, Math.PI, true);   // 2. parmak
+                    ctx.moveTo(1, -9);
+                    ctx.arc(1, -9, footprint.size * 0.25, 0, Math.PI, true);   // 3. parmak
+                    ctx.moveTo(2, -8);
+                    ctx.arc(2, -8, footprint.size * 0.2, 0, Math.PI, true);    // 4. parmak
+                    ctx.moveTo(3, -7);
+                    ctx.arc(3, -7, footprint.size * 0.15, 0, Math.PI, true);   // Küçük parmak
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            });
+        }
+        
+        // Engelleri çiz
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = obstacle.color;
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            });
+        }
+        
+        // Oyunu çiz
+        function draw() {
+            // Arkaplanı siyah bırak (zaten gameLoop'ta temizlendi)
+            
+            if (isEbe) {
+                // Ebe için görüş açısını göster
+                drawEbeView(myPlayer, true);
+                
+                // Görüş açısı dışında kalan alanı maskele (siyah kalsın)
+                drawViewMask();
+            } else {
+                // Ebe değilsek normal arkaplan
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // Engelleri çiz
+            drawObstacles();
+            
+            // Ayak izlerini çiz
+            drawFootprints();
+            
+            // Oyuncuları çiz
+            drawPlayers();
+        }
+        
+        // Görüş açısı maskesi
+        function drawViewMask() {
+            const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
+            
+            // Görüş açısı maskesi
+            ctx.save();
+            ctx.fillStyle = '#111';
+            
+            // Tüm ekran için maske oluştur
+            ctx.beginPath();
+            ctx.rect(0, 0, canvas.width, canvas.height);
+            
+            // Görüş açısını maskeden çıkar
+            ctx.moveTo(myPlayer.x, myPlayer.y);
+            ctx.arc(myPlayer.x, myPlayer.y, VIEW_DISTANCE, 
+                   myPlayer.angle - halfViewAngle, 
+                   myPlayer.angle + halfViewAngle);
+            ctx.closePath();
+            
+            // "evenodd" fill-rule ile görüş açısı dışındaki alanı kapla
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fill('evenodd');
+            ctx.globalCompositeOperation = 'source-over';
+            
+            ctx.restore();
+        }
+        
+        // Pencere yeniden boyutlandırma
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+        
+        // Fare kontrolleri
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+        
+        // Klavye kontrolleri
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'w' || e.key === 'W') keys.w = true;
+            if (e.key === 'a' || e.key === 'A') keys.a = true;
+            if (e.key === 's' || e.key === 'S') keys.s = true;
+            if (e.key === 'd' || e.key === 'D') keys.d = true;
+            if (e.key === 'Shift') keys.shift = true;
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'w' || e.key === 'W') keys.w = false;
+            if (e.key === 'a' || e.key === 'A') keys.a = false;
+            if (e.key === 's' || e.key === 'S') keys.s = false;
+            if (e.key === 'd' || e.key === 'D') keys.d = false;
+            if (e.key === 'Shift') keys.shift = false;
+        });
+        
+        // Kontroller
+        createRoomBtn.addEventListener('click', () => {
+            createRoomPanel.style.display = 'block';
+        });
+        
+        createRoomSubmit.addEventListener('click', createRoom);
+        
+        createRoomCancel.addEventListener('click', () => {
+            createRoomPanel.style.display = 'none';
+        });
+        
+        refreshRoomsBtn.addEventListener('click', refreshRooms);
+        
+        leaveRoomBtn.addEventListener('click', leaveRoom);
+        
+        // Rastgele bir kullanıcı adı öner
+        usernameInput.value = `Oyuncu${Math.floor(Math.random() * 1000)}`;
+        
+        // WebSocket bağlantısı kur
+        connectWebSocket();
+    </script>
+</body>
+</html>
