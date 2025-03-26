@@ -903,7 +903,7 @@ function startEbeCountdown() {
 // WebSocket Bağlantısı
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `wss://korebe.vercel.app/`;
     
     socket = new WebSocket(wsUrl);
     
