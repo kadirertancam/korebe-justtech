@@ -3,12 +3,10 @@ const WebSocket = require('ws');
 const http = require('http');
 const express = require('express');
 const path = require('path');
-const cors = require('cors'); // cors paketini yükleyin: npm install cors
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
-app.use(cors());
 
 // Statik dosyaları serve et
 app.use(express.static(__dirname));
@@ -18,18 +16,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Sağlık kontrolü endpoint'i (sunucunun çalıştığını kontrol etmek için)
-app.get('/health', (req, res) => {
-    res.status(200).send('Server is running');
-});
-
-// Gerisi aynı, mevcut server.js kodunuzla devam eder
-
-// Sunucuyu başlat
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda başlatıldı`);
-});
 // Oyun odaları
 const gameRooms = {};
 
