@@ -1016,8 +1016,11 @@ function startEbeCountdown() {
 
 // WebSocket Bağlantısı
 function connectWebSocket() {
+    const host = window.location.host;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `${protocol}//${host}`;
+    
+    console.log('Attempting to connect to WebSocket at:', wsUrl);
     
     socket = new WebSocket(wsUrl);
     
