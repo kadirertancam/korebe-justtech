@@ -19,17 +19,34 @@ class MobileControlManager {
         };
         
         this.setupEventListeners();
+        this.disablePCControls();
+    }
+    
+    // PC kontrol tuşlarını devre dışı bırak
+    disablePCControls() {
+        // Klavye event listener'larını devre dışı bırak
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+        
+        // Gerekirse tüm klavye kontrol değişkenlerini sıfırla
+        if (typeof keys !== 'undefined') {
+            keys.w = false;
+            keys.a = false;
+            keys.s = false;
+            keys.d = false;
+            keys.shift = false;
+        }
     }
     
     setupEventListeners() {
         // Dokunma başlangıcı
-        this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
+        this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         
         // Dokunma hareketi
-        this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
+        this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
         
         // Dokunma bitişi
-        this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
         
         // Mobil buton olayları
         this.actionTagButton.addEventListener('touchstart', this.handleTagAction.bind(this));
@@ -41,10 +58,20 @@ class MobileControlManager {
         const touch = event.touches[0];
         
         // Joystick kontrolü
-        if (this.isInJoystickArea(touch)) {
+        const joystickRect = this.joystickContainer.getBoundingClientRect();
+        if (
+            touch.clientX >= joystickRect.left && 
+            touch.clientX <= joystickRect.right && 
+            touch.clientY >= joystickRect.top && 
+            touch.clientY <= joystickRect.bottom
+        ) {
             this.joystickData.active = true;
-            this.joystickData.centerX = this.joystickContainer.offsetLeft + this.joystickContainer.offsetWidth / 2;
-            this.joystickData.centerY = this.joystickContainer.offsetTop + this.joystickContainer.offsetHeight / 2;
+            this.joystickData.centerX = joystickRect.left + joystickRect.width / 2;
+            this.joystickData.centerY = joystickRect.top + joystickRect.height / 2;
+        } else {
+            // Joystick alanı dışında fare/dokunma koordinatlarını güncelle
+            mouseX = touch.clientX;
+            mouseY = touch.clientY;
         }
     }
     
@@ -52,68 +79,84 @@ class MobileControlManager {
         event.preventDefault();
         const touch = event.touches[0];
         
+        // Joystick hareketini kontrol et
         if (this.joystickData.active) {
-            // Joystick hareketini hesapla
-            const dx = touch.pageX - this.joystickData.centerX;
-            const dy = touch.pageY - this.joystickData.centerY;
+            const dx = touch.clientX - this.joystickData.centerX;
+            const dy = touch.clientY - this.joystickData.centerY;
             
-            // Joystick sınırları içinde kalmak
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx);
+            const maxDistance = this.joystickData.radius;
             
-            if (distance <= this.joystickData.radius) {
+            // Joystick sınırları içinde hareket
+            if (distance <= maxDistance) {
                 this.joystick.style.transform = `translate(${dx}px, ${dy}px)`;
                 
-                // Oyuncu hareketini hesapla
-                const moveX = dx / this.joystickData.radius;
-                const moveY = dy / this.joystickData.radius;
+                // Hareket yönünü hesapla
+                const moveX = dx / maxDistance;
+                const moveY = dy / maxDistance;
                 
                 // Oyuncu hareketini güncelle
                 this.updatePlayerMovement(moveX, moveY);
+            } else {
+                // Maksimum sınırda sabit kal
+                const angle = Math.atan2(dy, dx);
+                const limitedX = Math.cos(angle) * maxDistance;
+                const limitedY = Math.sin(angle) * maxDistance;
+                
+                this.joystick.style.transform = `translate(${limitedX}px, ${limitedY}px)`;
+                
+                const moveX = limitedX / maxDistance;
+                const moveY = limitedY / maxDistance;
+                
+                this.updatePlayerMovement(moveX, moveY);
             }
+            
+            // Fare koordinatlarını da güncelle (bakış açısı için)
+            mouseX = touch.clientX;
+            mouseY = touch.clientY;
+        } else {
+            // Joystick dışında fare koordinatlarını güncelle
+            mouseX = touch.clientX;
+            mouseY = touch.clientY;
         }
     }
     
     handleTouchEnd(event) {
-        // Joystick konumunu sıfırla
-        this.joystickData.active = false;
-        this.joystick.style.transform = 'translate(-50%, -50%)';
+        event.preventDefault();
         
-        // Oyuncu hareketini durdur
-        this.updatePlayerMovement(0, 0);
-    }
-    
-    isInJoystickArea(touch) {
-        const joystickRect = this.joystickContainer.getBoundingClientRect();
-        return (
-            touch.pageX >= joystickRect.left &&
-            touch.pageX <= joystickRect.right &&
-            touch.pageY >= joystickRect.top &&
-            touch.pageY <= joystickRect.bottom
-        );
+        // Joystick konumunu sıfırla
+        if (this.joystickData.active) {
+            this.joystickData.active = false;
+            this.joystick.style.transform = 'translate(-50%, -50%)';
+            
+            // Hareket kontrollerini sıfırla
+            this.updatePlayerMovement(0, 0);
+        }
     }
     
     updatePlayerMovement(x, y) {
         // Oyuncu hareket kontrollerini güncelle
-        keys.w = y < -0.5;
-        keys.s = y > 0.5;
-        keys.a = x < -0.5;
-        keys.d = x > 0.5;
-        
-        // Koşma kontrolü
-        keys.shift = Math.abs(x) > 0.8 || Math.abs(y) > 0.8;
+        if (typeof keys !== 'undefined') {
+            keys.w = y < -0.5;
+            keys.s = y > 0.5;
+            keys.a = x < -0.5;
+            keys.d = x > 0.5;
+            
+            // Koşma kontrolü
+            keys.shift = Math.abs(x) > 0.8 || Math.abs(y) > 0.8;
+        }
     }
     
     handleTagAction() {
         // Ebeleme aksiyonu
-        if (this.gameState.isEbe) {
+        if (this.gameState.isEbe && typeof checkCatchPlayers === 'function') {
             checkCatchPlayers();
         }
     }
     
     handleSpecialAction() {
         // Karakter sınıfına özel yetenek
-        if (powerUpManager) {
+        if (typeof powerUpManager !== 'undefined') {
             powerUpManager.activatePowerUp(0); // İlk güç-up'ı kullan
         }
     }

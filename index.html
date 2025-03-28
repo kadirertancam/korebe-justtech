@@ -21,26 +21,29 @@
             height: 100vh;
             touch-action: none;
         }
-        #mobile-joystick-container {
+          /* Joystick için stil */
+          #mobile-joystick-container {
             position: fixed;
             bottom: 20px;
             left: 20px;
             width: 120px;
             height: 120px;
-            background: rgba(0,0,0,0.2);
+            background: rgba(0,0,0,0.3);
             border-radius: 50%;
             display: none;  /* Varsayılan olarak gizli */
+            z-index: 1000;
         }
         
         #mobile-joystick {
             position: absolute;
             width: 60px;
             height: 60px;
-            background: rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.7);
             border-radius: 50%;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            border: 2px solid rgba(0,0,0,0.5);
         }
         
         /* Mobil butonlar */
@@ -48,7 +51,8 @@
             position: fixed;
             bottom: 20px;
             right: 20px;
-            display: none;  /* Varsayılan olarak gizli */
+            display: flex;
+            z-index: 1000;
         }
         
         .mobile-button {
@@ -61,6 +65,9 @@
             justify-content: center;
             align-items: center;
             color: white;
+            font-size: 14px;
+            text-align: center;
+            display: none;  /* Varsayılan olarak gizli */
         }
         #lobby-container {
             position: absolute;
@@ -499,20 +506,20 @@
 <body>
     <!-- Lobi Ekranı -->
      <!-- Kan Temalı Geri Sayım Overlay -->
+     <div id="mobile-joystick-container">
+        <div id="mobile-joystick"></div>
+    </div>
+    
+    <div id="mobile-action-buttons">
+        <div id="action-tag" class="mobile-button">Yakala</div>
+        <div id="action-special" class="mobile-button">Özel</div>
+    </div>
 <div id="blood-overlay" style="display: none;">
     <canvas id="blood-canvas"></canvas>
     <div id="countdown-splash"></div>
     <div id="countdown-container">
         <div id="countdown-number">3</div>
     </div>
-</div>
-<div id="mobile-joystick-container">
-    <div id="mobile-joystick"></div>
-</div>
-
-<div id="mobile-action-buttons">
-    <div id="action-tag" class="mobile-button">Yakala</div>
-    <div id="action-special" class="mobile-button">Özel</div>
 </div>
     <div id="lobby-container">
         <div class="lobby-panel">
@@ -603,6 +610,7 @@
         </div>
     </div>
     <script src="dynamic-maze.js"></script>
+    <script src="mobile-controls.js"></script>
     <script src="power-ups.js"></script>
     <script src="game-enhancements.js"></script>
     <!-- Önce orijinal oyun dosyasını yükleyelim -->
@@ -1224,7 +1232,7 @@ function connectWebSocket() {
                             players[player.id] = player;
                         }
                     });
-                    
+                    initMobileControls()
                     // Oyuna başla
                     startGame();
                     updatePlayerList();
