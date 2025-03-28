@@ -551,7 +551,9 @@
             <p>Shift (Ebe iken) - Dash hareketi</p>
         </div>
     </div>
-
+    <script src="dynamic-maze.js"></script>
+    <script src="power-ups.js"></script>
+    <script src="game-enhancements.js"></script>
     <!-- Önce orijinal oyun dosyasını yükleyelim -->
     <script>
  // DOM Elementleri
@@ -611,8 +613,8 @@ let dashUI = null; // Dash sayacı göstergesi
 let staminaBar = null; // Stamina barı göstergesi
 
 // Oyun modu ve karakter sınıfı
-let gameMode = 'classic';
-let selectedCharacterType = 'runner';
+gameMode = 'classic';
+selectedCharacterType = 'runner';
 
 // Oyuncu nesnesi
 const myPlayer = {
@@ -671,10 +673,10 @@ const HIDING_VISIBILITY_REDUCTION = 0.5; // Gizlenme durumunda görünürlük az
 
 // Oyun geliştirmeleri için yeni değişkenler
 let playerVisibilityMultiplier = 1.0; // Görünürlük çarpanı
-let showFps = false; // FPS gösterimi
-let gameState = 'menu'; // Oyun durumu (menu, playing, paused, gameOver)
-let gameTimer = 0; // Oyun zamanlayıcısı
-let timerInterval = null; // Zamanlayıcı aralığı
+showFps = false; // FPS gösterimi
+gameState = 'menu'; // Oyun durumu (menu, playing, paused, gameOver)
+gameTimer = 0; // Oyun zamanlayıcısı
+timerInterval = null; // Zamanlayıcı aralığı
 
 // Klavye kontrolleri
 const keys = {
@@ -684,7 +686,45 @@ const keys = {
     d: false,
     shift: false
 };
-
+const originalStartGame = startGame;
+startGame = function() {
+    // Önce orijinal fonksiyonu çağır
+    originalStartGame();
+    
+    // Sonra geliştirilmiş sistemleri başlat
+    if (typeof initGameEnhancements === 'function') {
+        console.log("Oyun geliştirmeleri başlatılıyor...");
+        initGameEnhancements();
+        
+        // Karakter sınıfı özelliklerini uygula
+        if (typeof setupPlayerClass === 'function') {
+            setupPlayerClass();
+        }
+        
+        // Dinamik labirent sistemini başlat
+        if (typeof setupDynamicMaze === 'function') {
+            setupDynamicMaze();
+        }
+        
+        // Güç-up sistemini başlat 
+        if (typeof setupPowerUpSystem === 'function') {
+            setupPowerUpSystem();
+        }
+        
+        // Seçilen oyun modunu başlat
+        if (typeof startGameMode === 'function') {
+            startGameMode();
+        }
+    }
+    
+    // Geliştirilmiş oyun döngüsünü başlat
+    if (typeof enhancedGameLoop === 'function') {
+        requestAnimationFrame(enhancedGameLoop);
+    } else {
+        // Orijinal oyun döngüsünü başlat
+        requestAnimationFrame(gameLoop);
+    }
+};
 // Renk seçici
 const colorOptions = colorSelector.querySelectorAll('.color-option');
 colorOptions.forEach(option => {
@@ -1016,11 +1056,8 @@ function startEbeCountdown() {
 
 // WebSocket Bağlantısı
 function connectWebSocket() {
-    const host = window.location.host;
-    const protocol = window.location.protocol === 'http:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${host}`;
-    
-    console.log('Attempting to connect to WebSocket at:', wsUrl);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
     
     socket = new WebSocket(wsUrl);
     
@@ -1504,7 +1541,7 @@ function setupMaze() {
 // Oyuncunun duvarlarla çarpışma kontrolü
 function checkWallCollision(x, y) {
     // Oyuncunun bulunduğu karenin koordinatlarını hesapla
-    const tileX = Math.floor(x / TILE_SIZE);
+     const tileX = Math.floor(x / TILE_SIZE);
     const tileY = Math.floor(y / TILE_SIZE);
     
     // Sınır kontrolü
@@ -1709,8 +1746,9 @@ function updatePlayer(deltaTime) {
     }
     
     // Yeni pozisyon hesapla
-    let newX = myPlayer.x + dx * speed * deltaTime / 16.67;
-    let newY = myPlayer.y + dy * speed * deltaTime / 16.67;
+    const cappedDeltaTime = Math.min(deltaTime, 50); // 50ms'den fazla farkları sınırla
+    let newX = myPlayer.x + dx * speed * (cappedDeltaTime / 16.67) * 0.5; // 0.5 çarpanı ekledik
+    let newY = myPlayer.y + dy * speed * (cappedDeltaTime / 16.67) * 0.5;
     
     // Duvar çarpışma kontrolü
     if (!checkWallCollision(newX, myPlayer.y)) {
@@ -2298,38 +2336,28 @@ function updateStaminaUI() {
 // Character class setup
 function setupPlayerClass() {
     myPlayer.characterClass = selectedCharacterType;
-    
-    // Set character-specific attributes
+    myPlayer.speed = myPlayer.speed / 3;
+    // Set character-specific attributes - hız değerlerini azalt
     switch (myPlayer.characterClass) {
-        case 'runner':
-            myPlayer.speed = 180; // Faster speed
-            // Runner has longer stamina
-            break;
-            
-        case 'stealth':
-            myPlayer.speed = 140;
-            playerVisibilityMultiplier = 0.7; // Harder to see
-            // Stealth leaves fewer footprints
-            break;
-            
-        case 'defender':
-            myPlayer.speed = 130; // Slower but more defensive
-            // More resistant to being caught
-            break;
-            
-        case 'scout':
-            myPlayer.speed = 150;
-            // Can see further and detect footprints better
-            break;
-            
-        case 'trickster':
-            myPlayer.speed = 160;
-            // Can create false footprints and distractions
-            break;
-            
-        default:
-            myPlayer.speed = 150; // Default
-    }
+    case 'runner':
+      myPlayer.speed = 40; // 120 yerine
+      break;
+    case 'stealth':
+      myPlayer.speed = 20; // 90 yerine
+      break;
+    case 'defender':
+      myPlayer.speed = 17; // 80 yerine
+      break;
+    case 'scout':
+      myPlayer.speed = 25; // 100 yerine
+      break;
+    case 'trickster':
+      myPlayer.speed = 30; // 110 yerine
+      break;
+    default:
+      myPlayer.speed = 25; // 100 yerine
+  }
+    
     
     console.log(`Karakter sınıfı ayarlandı: ${myPlayer.characterClass}`);
 }
