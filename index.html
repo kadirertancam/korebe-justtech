@@ -393,6 +393,64 @@
         opacity: 0.7;
         z-index: 1001;
     }
+
+    /* Güç-up ve diğer özellikler için yeni stiller */
+    .powerup-slot {
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .powerup-slot:hover {
+        transform: scale(1.1);
+    }
+    
+    .active-powerup-item {
+        animation: pulse-glow 1.5s infinite alternate;
+    }
+    
+    @keyframes pulse-glow {
+        0% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+        100% { box-shadow: 0 0 15px rgba(255, 255, 255, 0.8); }
+    }
+    
+    /* Parçacık efektleri için stil */
+    .particle {
+        position: absolute;
+        pointer-events: none;
+    }
+    
+    /* Gizli geçit ve teleport için stil */
+    .teleport-marker {
+        animation: teleport-pulse 2s infinite;
+    }
+    
+    @keyframes teleport-pulse {
+        0% { transform: scale(1); opacity: 0.7; }
+        50% { transform: scale(1.2); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.7; }
+    }
+
+    /* Başarı bildirimleri için stil */
+    .achievement-notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: rgba(46, 204, 113, 0.9);
+        color: white;
+        padding: 10px 15px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        animation: slideIn 0.5s, fadeOut 0.5s 4.5s forwards;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    @keyframes slideIn {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+    }
     </style>
 </head>
 <body>
@@ -425,6 +483,28 @@
                     <div class="color-option" style="background-color: cyan;" data-color="cyan"></div>
                     <div class="color-option" style="background-color: magenta;" data-color="magenta"></div>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label for="game-mode-select">Oyun Modu:</label>
+                <select id="game-mode-select">
+                    <option value="classic">Klasik Mod</option>
+                    <option value="infection">Enfeksiyon Modu</option>
+                    <option value="treasure">Hazine Avcısı Modu</option>
+                    <option value="timeAttack">Zamana Karşı Mod</option>
+                    <option value="teams">Takım Modu</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="character-class-select">Karakter Sınıfı:</label>
+                <select id="character-class-select">
+                    <option value="runner">Koşucu</option>
+                    <option value="stealth">Gizli</option>
+                    <option value="defender">Koruyucu</option>
+                    <option value="scout">İzci</option>
+                    <option value="trickster">Hilebaz</option>
+                </select>
             </div>
             
             <div class="form-group">
@@ -466,12 +546,13 @@
             <p>WASD - Hareket etme</p>
             <p>Shift - Koşu</p>
             <p>Fare - Bakış Yönü (Mouse ile nereye bakarsanız o yönü görürsünüz)</p>
+            <p>1-3 - Güç-up kullanma</p>
             <p>Ebeseniz, yakalamak için oyuncuya bakmalı ve yaklaşmalısınız</p>
+            <p>Shift (Ebe iken) - Dash hareketi</p>
         </div>
     </div>
-    <script src="power-ups.js"></script>
-    <script src="dynamic-maze.js"></script>
-    <script src="game-enhancements.js"></script>
+
+    <!-- Önce orijinal oyun dosyasını yükleyelim -->
     <script>
  // DOM Elementleri
 const lobbyContainer = document.getElementById('lobby-container');
@@ -490,6 +571,8 @@ const playersContainer = document.getElementById('players');
 const statusMessage = document.getElementById('status-message');
 const usernameInput = document.getElementById('username');
 const colorSelector = document.getElementById('color-selector');
+const gameModeSelect = document.getElementById('game-mode-select');
+const characterClassSelect = document.getElementById('character-class-select');
 
 // Canvas boyutlandırma
 canvas.width = window.innerWidth;
@@ -527,13 +610,17 @@ let isBloodInitialized = false;
 let dashUI = null; // Dash sayacı göstergesi
 let staminaBar = null; // Stamina barı göstergesi
 
+// Oyun modu ve karakter sınıfı
+let gameMode = 'classic';
+let selectedCharacterType = 'runner';
+
 // Oyuncu nesnesi
 const myPlayer = {
     x: 0,
     y: 0,
     angle: 0,
     size: 20,
-    speed: 4,
+    speed: 150, // Base değiştirildi - karakter sınıfına göre ayarlanacak
     isRunning: false,
     lastFootprintPos: { x: 0, y: 0 },
     footprintDistance: 0,
@@ -541,13 +628,22 @@ const myPlayer = {
     lastDashTime: 0, // Son dash yapılan zaman
     lastDashRechargeTime: 0, // Son dash hakkı yenilenme zamanı
     stamina: 100, // Oyuncunun staminası (%)
-    isStaminaEmpty: false // Stamina tamamen bitti mi?
+    isStaminaEmpty: false, // Stamina tamamen bitti mi?
+    characterClass: 'runner', // Başlangıç karakter sınıfı
+    xp: 0, // Deneyim puanı
+    level: 1, // Seviye
+    inventory: [] // Envanter
 };
 
-// Sabitler
+// Yeni eklenen sabitler ve referanslar
+// Bu sabitleri game-enhancements.js ile uyumlu hale getirdik
 const PLAYER_SIZE = 15;
-const VIEW_ANGLE = 60;
-const VIEW_DISTANCE = 200;
+const BASE_VIEW_ANGLE = 60;
+const VIEW_ANGLE = BASE_VIEW_ANGLE;
+const BASE_VIEW_DISTANCE = 200;
+const VIEW_DISTANCE = BASE_VIEW_DISTANCE;
+const BASE_TAG_DISTANCE = 40;
+const TAG_DISTANCE = BASE_TAG_DISTANCE;
 const FOOTPRINT_DETECTION_DISTANCE = 150;
 const FOOTPRINT_DURATION = 1000;
 const FOOTPRINT_INTERVAL = 30;
@@ -573,6 +669,13 @@ const HIDING_SPOT_MARKER_COLOR = '#333'; // Gizlenme yeri işaretleyici rengi
 const HIDING_ALPHA_MIN = 0.3; // Gizlenme durumunda minimum şeffaflık
 const HIDING_VISIBILITY_REDUCTION = 0.5; // Gizlenme durumunda görünürlük azalma oranı
 
+// Oyun geliştirmeleri için yeni değişkenler
+let playerVisibilityMultiplier = 1.0; // Görünürlük çarpanı
+let showFps = false; // FPS gösterimi
+let gameState = 'menu'; // Oyun durumu (menu, playing, paused, gameOver)
+let gameTimer = 0; // Oyun zamanlayıcısı
+let timerInterval = null; // Zamanlayıcı aralığı
+
 // Klavye kontrolleri
 const keys = {
     w: false,
@@ -590,6 +693,15 @@ colorOptions.forEach(option => {
         option.classList.add('selected');
         myColor = option.getAttribute('data-color');
     });
+});
+
+// Oyun modu ve karakter sınıfı seçimi için event listener'lar
+gameModeSelect.addEventListener('change', (e) => {
+    gameMode = e.target.value;
+});
+
+characterClassSelect.addEventListener('change', (e) => {
+    selectedCharacterType = e.target.value;
 });
 
 // Kan pozları (parlak ve koyu kırmızı renkler)
@@ -1232,6 +1344,13 @@ function leaveRoom() {
     
     // Oyunu durdur
     cancelAnimationFrame(gameLoop);
+
+    // Güç-up ve dinamik labirent temizleme
+    if (powerUpManager && powerUpManager.UI) {
+        powerUpManager.UI.remove();
+    }
+    powerUpManager = null;
+    mazeManager = null;
 }
 
 // Lobi ekranını göster
@@ -1261,9 +1380,27 @@ function startGame() {
     } else {
         showStatusMessage('Ebeden kaç ve gizlenme yerlerini kullan!');
     }
+
+    // Oyun durumunu güncelle
+    gameState = 'playing';
+
+    // Oyun geliştirmelerini başlat
+    initGameEnhancements();
+    
+    // Karakter sınıfına göre oyuncu ayarla
+    setupPlayerClass();
+
+    // Dinamik labirenti başlat
+    setupDynamicMaze();
+
+    // Güç-up sistemini başlat
+    setupPowerUpSystem();
+
+    // Seçilen oyun modunu başlat
+    startGameMode();
     
     // Oyun döngüsünü başlat
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(enhancedGameLoop);
 }
 
 // Labirent veri yapısını oluştur (1: duvar, 0: boş alan, 2: gizlenme yeri)
@@ -1472,6 +1609,11 @@ function setupCamera() {
 
 // Ayak izi oluştur
 function createFootprint() {
+    // Güç-up sistemi ayak izini engelliyorsa
+    if (shouldCreateFootprint() === false) {
+        return; // Ayak izi oluşturma
+    }
+
     const footprint = {
         x: myPlayer.x,
         y: myPlayer.y,
@@ -1493,99 +1635,6 @@ function createFootprint() {
             footprint: footprint
         }));
     }
-}
-
-// Oyun döngüsü
-function gameLoop(timestamp) {
-    // Hata ayıklama için güvenlik kontrolü
-    if (!canvas) {
-        console.error("Canvas elementi bulunamadı!");
-        return;
-    }
-    
-    if (!lastTime) lastTime = timestamp;
-    const deltaTime = timestamp - lastTime;
-    lastTime = timestamp;
-    
-    try {
-        // Oyuncuyu güncelle
-        updatePlayer(deltaTime);
-        
-        // Ayak izlerini güncelle
-        updateFootprints();
-        
-        // Kamerayı ayarla
-        const camera = setupCamera();
-        camera.follow(myPlayer);
-        
-        // Yakalama kontrolü
-        if (isEbe && !isFreezed) {
-            checkCatchPlayers();
-        }
-        
-        // Siyah ekran çiz (her şey görünmez)
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Kamera transformasyonunu uygula
-        camera.apply();
-        
-        // Labirenti çiz
-        drawMaze();
-        
-        // Çiz - Sadece görüş açısı içinde görünür
-        if (isEbe) {
-            // Ebe için görüş açısını göster
-            drawEbeView(myPlayer, true);
-            
-            // Görüş açısı dışında kalan alanı maskele (siyah kalsın)
-            drawViewMask();
-        }
-        
-        // Ayak izlerini çiz
-        drawFootprints();
-        
-        // Oyuncuları çiz
-        drawPlayers();
-        
-        // Kamera transformasyonunu geri al
-        camera.restore();
-        
-        // Eğer ebe donmuş durumdaysa sayaç bilgisini çiz
-        if (isEbe && isFreezed) {
-            drawFreezeCountdown();
-        }
-        
-        // UI elemanlarını güncelle
-        updateDashUI();
-        updateStaminaUI();
-        
-        // Pozisyon güncellemesi gönder
-        sendPositionUpdate();
-        
-        requestAnimationFrame(gameLoop);
-    } catch (e) {
-        console.error("Oyun döngüsünde hata:", e);
-        requestAnimationFrame(gameLoop); // Hata olsa bile devam et
-    }
-}
-
-// Donma süresi görsel geri bildirimi
-function drawFreezeCountdown() {
-    ctx.save();
-    
-    // Yarı saydam kırmızı ekran efekti
-    ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Sayaç mesajını göster
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 48px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('EBE HAZlRLANlYOR...', canvas.width / 2, canvas.height / 2);
-    
-    ctx.restore();
 }
 
 // Pozisyon güncellemesi gönder
@@ -1642,7 +1691,11 @@ function updatePlayer(deltaTime) {
     } else {
         myPlayer.isRunning = false;
     }
-    
+
+    // Oyun geliştirmeleri entegrasyonu - güç-up modifikatörlerini uygula
+    updatePlayerWithEnhancements(deltaTime);
+
+    // Speed değeri güncellenmiş olabilir, mevcut hızı al
     const speed = myPlayer.isRunning ? myPlayer.speed * 1.5 : myPlayer.speed;
     
     // Gizlenme durumunda şeffaflık değerini ayarla
@@ -1653,8 +1706,8 @@ function updatePlayer(deltaTime) {
     }
     
     // Yeni pozisyon hesapla
-    let newX = myPlayer.x + dx * speed;
-    let newY = myPlayer.y + dy * speed;
+    let newX = myPlayer.x + dx * speed * deltaTime / 16.67;
+    let newY = myPlayer.y + dy * speed * deltaTime / 16.67;
     
     // Duvar çarpışma kontrolü
     if (!checkWallCollision(newX, myPlayer.y)) {
@@ -2001,36 +2054,6 @@ function drawObstacles() {
     });
 }
 
-// Oyunu çiz
-function draw() {
-    // Arkaplanı siyah bırak (zaten gameLoop'ta temizlendi)
-    
-    if (isEbe) {
-        // Ebe için görüş açısını göster
-        drawEbeView(myPlayer, true);
-        
-        // Görüş açısı dışında kalan alanı maskele (siyah kalsın)
-        drawViewMask();
-    } else {
-        // Ebe değilsek normal arkaplan
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    
-    // Engelleri çiz
-    drawObstacles();
-    
-    // Ayak izlerini çiz
-    drawFootprints();
-    
-    // Oyuncuları çiz
-    drawPlayers();
-    
-    // UI elemanlarını güncelle
-    updateDashUI();
-    updateStaminaUI();
-}
-
 // Görüş açısı maskesi
 function drawViewMask() {
     const halfViewAngle = (VIEW_ANGLE * Math.PI / 180) / 2;
@@ -2070,363 +2093,968 @@ canvas.addEventListener('mousemove', (e) => {
     mouseY = e.clientY;
 });
 
-// Klavye kontrolleri
+
+// Keyboard controls (continuing from where the document was cut off)
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'w' || e.key === 'W') keys.w = true;
-    if (e.key === 'a' || e.key === 'A') keys.a = true;
-    if (e.key === 's' || e.key === 'S') keys.s = true;
-    if (e.key === 'd' || e.key === 'D') keys.d = true;
-    if (e.key === 'Shift') {
-        keys.shift = true;
-        // Eğer Ebe ise ve shift tuşuna basıldıysa dash yap
-        if (isEbe) {
-            performDash();
+    if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.w = true;
+    if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = true;
+    if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = true;
+    if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = true;
+    if (e.key === 'Shift') keys.shift = true;
+    
+    // Power-up usage with number keys
+    if (e.key === '1' || e.key === '2' || e.key === '3') {
+        const powerUpIndex = parseInt(e.key) - 1;
+        if (powerUpManager) {
+            powerUpManager.usePowerUp(powerUpIndex);
         }
+    }
+    
+    // Dash for "it" player
+    if (e.key === 'Shift' && isEbe && myPlayer.dashCount > 0 && !isFreezed) {
+        performDash();
     }
 });
 
 window.addEventListener('keyup', (e) => {
-    if (e.key === 'w' || e.key === 'W') keys.w = false;
-    if (e.key === 'a' || e.key === 'A') keys.a = false;
-    if (e.key === 's' || e.key === 'S') keys.s = false;
-    if (e.key === 'd' || e.key === 'D') keys.d = false;
+    if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.w = false;
+    if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = false;
+    if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = false;
+    if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = false;
     if (e.key === 'Shift') keys.shift = false;
-});
-
-// Sayfa yüklendiğinde elementleri hazırla
-document.addEventListener('DOMContentLoaded', function() {
-    // Sayfa hazır olduğunda kan elementlerini başlat
-    initBloodElements();
     
-    // Dash sayacı ve stamina barı UI elementlerini oluştur
-    createGameUI();
-});
-
-// Kontroller
-createRoomBtn.addEventListener('click', () => {
-    createRoomPanel.style.display = 'block';
-});
-
-createRoomSubmit.addEventListener('click', createRoom);
-
-createRoomCancel.addEventListener('click', () => {
-    createRoomPanel.style.display = 'none';
-});
-
-refreshRoomsBtn.addEventListener('click', refreshRooms);
-
-leaveRoomBtn.addEventListener('click', leaveRoom);
-
-// Rastgele bir kullanıcı adı öner
-usernameInput.value = `Oyuncu${Math.floor(Math.random() * 1000)}`;
-
-// Oyun UI elementlerini oluştur
-function createGameUI() {
-    // Dash sayacı için UI ekle
-    dashUI = document.createElement('div');
-    dashUI.id = 'dash-counter';
-    dashUI.className = 'game-ui-element';
-    dashUI.innerHTML = `
-        <div class="ui-title">Dash Hakkı</div>
-        <div class="dash-icons">
-            <span class="dash-icon available"></span>
-            <span class="dash-icon available"></span>
-            <span class="dash-icon available"></span>
-        </div>
-        <div class="dash-cooldown"></div>
-    `;
-    
-    // Stamina barı için UI ekle
-    staminaBar = document.createElement('div');
-    staminaBar.id = 'stamina-bar';
-    staminaBar.className = 'game-ui-element';
-    staminaBar.innerHTML = `
-        <div class="ui-title">Stamina</div>
-        <div class="stamina-container">
-            <div class="stamina-fill"></div>
-        </div>
-    `;
-    
-    // Game container içine ekle
-    gameContainer.appendChild(dashUI);
-    gameContainer.appendChild(staminaBar);
-    
-    // CSS ekle
-    const style = document.createElement('style');
-    style.textContent = `
-        .game-ui-element {
-            position: absolute;
-            background-color: rgba(0, 0, 0, 0.7);
-            border-radius: 5px;
-            padding: 10px;
-            color: white;
-            font-family: Arial, sans-serif;
-            z-index: 5;
-        }
-        
-        .ui-title {
-            font-size: 12px;
-            margin-bottom: 5px;
-            text-align: center;
-        }
-        
-        #dash-counter {
-            right: 10px;
-            bottom: 80px;
-            width: 120px;
-        }
-        
-        .dash-icons {
-            display: flex;
-            justify-content: center;
-            gap: 5px;
-            margin-bottom: 5px;
-        }
-        
-        .dash-icon {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: #333;
-            display: inline-block;
-        }
-        
-        .dash-icon.available {
-            background-color: #e74c3c;
-            box-shadow: 0 0 5px #e74c3c;
-        }
-        
-        .dash-cooldown {
-            height: 2px;
-            width: 100%;
-            background-color: #333;
-            position: relative;
-        }
-        
-        .dash-cooldown::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            width: 0%;
-            background-color: #e74c3c;
-        }
-        
-        #stamina-bar {
-            left: 10px;
-            bottom: 80px;
-            width: 150px;
-        }
-        
-        .stamina-container {
-            width: 100%;
-            height: 10px;
-            background-color: #333;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        
-        .stamina-fill {
-            height: 100%;
-            width: 100%;
-            background-color: #2ecc71;
-            transition: width 0.3s;
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Dash sayacını güncelle
-function updateDashUI() {
-    if (!dashUI) return;
-    
-    // Dash ikonlarını güncelle
-    const dashIcons = dashUI.querySelectorAll('.dash-icon');
-    for (let i = 0; i < dashIcons.length; i++) {
-        if (i < myPlayer.dashCount) {
-            dashIcons[i].classList.add('available');
-        } else {
-            dashIcons[i].classList.remove('available');
-        }
+    // Toggle FPS display
+    if (e.key === 'F' || e.key === 'f') {
+        showFps = !showFps;
     }
     
-    // Dash bekleme süresini göster
-    const dashCooldown = dashUI.querySelector('.dash-cooldown');
-    if (dashCooldown) {
-        const currentTime = Date.now();
-        const timeSinceLastDash = currentTime - myPlayer.lastDashTime;
-        
-        if (timeSinceLastDash < DASH_COOLDOWN) {
-            const progress = (timeSinceLastDash / DASH_COOLDOWN) * 100;
-            dashCooldown.style.background = `linear-gradient(to right, #e74c3c ${progress}%, #333 ${progress}%)`;
-        } else {
-            dashCooldown.style.background = `#333`;
+    // Debug key for testing features
+    if (e.key === 'P' || e.key === 'p') {
+        // Debug functionality
+        if (powerUpManager) {
+            powerUpManager.addRandomPowerUp();
         }
     }
-}
+});
 
-// Stamina barını güncelle
-function updateStaminaUI() {
-    if (!staminaBar) return;
-    
-    const staminaFill = staminaBar.querySelector('.stamina-fill');
-    if (staminaFill) {
-        staminaFill.style.width = `${myPlayer.stamina}%`;
-        
-        // Stamina düşükse rengi değiştir
-        if (myPlayer.stamina < 30) {
-            staminaFill.style.backgroundColor = '#e74c3c'; // Kırmızı
-        } else if (myPlayer.stamina < 60) {
-            staminaFill.style.backgroundColor = '#f39c12'; // Turuncu
-        } else {
-            staminaFill.style.backgroundColor = '#2ecc71'; // Yeşil
-        }
-    }
-}
-
-// Dash işlemini gerçekleştir
+// Dash functionality for "it" player
 function performDash() {
-    if (!isEbe) return; // Sadece ebe dash yapabilir
-    
     const currentTime = Date.now();
     
-    // Dash yapabilme kontrolü
-    if (myPlayer.dashCount <= 0 || (currentTime - myPlayer.lastDashTime) < DASH_COOLDOWN) {
-        return; // Dash hakkı yok veya bekleme süresi dolmamış
-    }
-    
-    // Dash yapılacak oyuncuyu bul (görüş açısındaki en yakın oyuncu)
-    let targetPlayer = null;
-    let minDistance = Infinity;
-    
-    Object.values(players).forEach(player => {
-        if (!player.isEbe) { // Ebe olmayan oyuncular hedef olabilir
-            const dist = distance(myPlayer.x, myPlayer.y, player.x, player.y);
-            const inViewAngle = isInAngle(myPlayer.x, myPlayer.y, player.x, player.y, myPlayer.angle, VIEW_ANGLE);
-            
-            if (inViewAngle && dist < minDistance && dist < VIEW_DISTANCE) {
-                minDistance = dist;
-                targetPlayer = player;
-            }
-        }
-    });
-    
-    // Hedef oyuncu yoksa dash yapma
-    if (!targetPlayer) return;
-    
-    // Dash yönünü hesapla
-    const dashAngle = Math.atan2(targetPlayer.y - myPlayer.y, targetPlayer.x - myPlayer.x);
-    
-    // Dash hareketini başlat
-    const dashInterval = setInterval(() => {
-        // Dash hareketini yap
-        myPlayer.x += Math.cos(dashAngle) * (DASH_POWER / 10);
-        myPlayer.y += Math.sin(dashAngle) * (DASH_POWER / 10);
-        
-        // Sınır kontrolü
-        if (myPlayer.x < PLAYER_SIZE) myPlayer.x = PLAYER_SIZE;
-        if (myPlayer.x > canvas.width - PLAYER_SIZE) myPlayer.x = canvas.width - PLAYER_SIZE;
-        if (myPlayer.y < PLAYER_SIZE) myPlayer.y = PLAYER_SIZE;
-        if (myPlayer.y > canvas.height - PLAYER_SIZE) myPlayer.y = canvas.height - PLAYER_SIZE;
-    }, 10);
-    
-    // Dash süresini sınırla
-    setTimeout(() => {
-        clearInterval(dashInterval);
-    }, DASH_DURATION);
-    
-    // Dash hakkını azalt ve son dash zamanını güncelle
-    myPlayer.dashCount--;
-    myPlayer.lastDashTime = currentTime;
-    
-    // Dash UI'ı güncelle
-    updateDashUI();
-    
-    // Dash ses efekti
-    playDashSound();
-}
-
-// Dash yenilenme sayacını güncelle
-function updateDashRecharge(deltaTime) {
-    const currentTime = Date.now();
-    
-    // Dash hakkı maksimumda ise işlem yapma
-    if (myPlayer.dashCount >= MAX_DASH_COUNT) {
-        myPlayer.lastDashRechargeTime = currentTime;
+    // Dash cooldown check
+    if (currentTime - myPlayer.lastDashTime < DASH_COOLDOWN) {
+        console.log("Dash hala bekleme süresinde!");
         return;
     }
     
-    // Dash hakkı yenilenme süresi kontrol edilir
-    if ((currentTime - myPlayer.lastDashRechargeTime) >= DASH_RECHARGE_TIME) {
-        // Yeni dash hakkı ekle
-        myPlayer.dashCount = Math.min(myPlayer.dashCount + 1, MAX_DASH_COUNT);
+    // Use a dash charge
+    myPlayer.dashCount--;
+    myPlayer.lastDashTime = currentTime;
+    
+    // Visual and audio feedback
+    showStatusMessage("Dash!", 500);
+    // TODO: Add dash sound effect
+    
+    // Apply dash movement in the direction player is facing
+    const dashX = Math.cos(myPlayer.angle) * DASH_POWER;
+    const dashY = Math.sin(myPlayer.angle) * DASH_POWER;
+    
+    // Check if dash would hit a wall
+    const newX = myPlayer.x + dashX;
+    const newY = myPlayer.y + dashY;
+    
+    if (!checkWallCollision(newX, myPlayer.y)) {
+        myPlayer.x = newX;
+    }
+    
+    if (!checkWallCollision(myPlayer.x, newY)) {
+        myPlayer.y = newY;
+    }
+    
+    // Send position update to server after dash
+    sendPositionUpdate();
+    
+    // Update dash UI
+    updateDashUI();
+}
+
+// Recharge dash abilities over time
+function updateDashRecharge(deltaTime) {
+    const currentTime = Date.now();
+    
+    // Recharge a dash every DASH_RECHARGE_TIME milliseconds
+    if (myPlayer.dashCount < MAX_DASH_COUNT && 
+        currentTime - myPlayer.lastDashRechargeTime >= DASH_RECHARGE_TIME) {
+        myPlayer.dashCount++;
         myPlayer.lastDashRechargeTime = currentTime;
         
-        // UI güncelle
+        // Update dash UI
         updateDashUI();
     }
 }
 
-// Stamina'yı güncelle
-function updateStamina(deltaTime) {
-    const deltaSeconds = deltaTime / 1000; // Saniye cinsinden geçen süre
+// Update dash UI elements
+function updateDashUI() {
+    // Create dash UI if it doesn't exist
+    if (!dashUI) {
+        dashUI = document.createElement('div');
+        dashUI.style.position = 'absolute';
+        dashUI.style.bottom = '100px';
+        dashUI.style.right = '20px';
+        dashUI.style.display = 'flex';
+        dashUI.style.gap = '5px';
+        gameContainer.appendChild(dashUI);
+    }
     
+    // Update dash charges display
+    dashUI.innerHTML = '';
+    for (let i = 0; i < MAX_DASH_COUNT; i++) {
+        const dashCharge = document.createElement('div');
+        dashCharge.style.width = '20px';
+        dashCharge.style.height = '20px';
+        dashCharge.style.borderRadius = '50%';
+        dashCharge.style.backgroundColor = i < myPlayer.dashCount ? 'red' : 'gray';
+        dashCharge.style.border = '2px solid white';
+        dashUI.appendChild(dashCharge);
+    }
+}
+
+// Update stamina bar
+function updateStamina(deltaTime) {
+    // Reduce stamina when running
     if (myPlayer.isRunning && !myPlayer.isStaminaEmpty) {
-        // Koşarken stamina azalt
-        myPlayer.stamina -= STAMINA_DEPLETION_RATE * deltaSeconds;
+        myPlayer.stamina -= STAMINA_DEPLETION_RATE * deltaTime / 1000;
         
-        // Stamina bitti mi kontrolü
+        // Check if stamina is depleted
         if (myPlayer.stamina <= 0) {
             myPlayer.stamina = 0;
-            myPlayer.isStaminaEmpty = true; // Stamina boşaldı, koşamaz duruma geldi
-            myPlayer.isRunning = false; // Koşmayı durdur
+            myPlayer.isStaminaEmpty = true;
+            myPlayer.isRunning = false;
         }
-    } else if (!myPlayer.isRunning) {
-        // Koşmuyorsa stamina doldur
-        myPlayer.stamina += STAMINA_RECHARGE_RATE * deltaSeconds;
+    } 
+    // Recharge stamina when not running
+    else if (!myPlayer.isRunning) {
+        myPlayer.stamina += STAMINA_RECHARGE_RATE * deltaTime / 1000;
         
-        // Stamina maksimuma ulaştı mı kontrolü
+        // Cap stamina and reset empty flag when enough is recharged
         if (myPlayer.stamina >= MAX_STAMINA) {
             myPlayer.stamina = MAX_STAMINA;
-            myPlayer.isStaminaEmpty = false; // Stamina doldu, koşabilir duruma geldi
-        } else if (myPlayer.stamina >= MIN_STAMINA_TO_RUN) {
-            // Stamina koşabilecek kadar doldu
+        }
+        
+        // Allow running again after stamina is recharged to a threshold
+        if (myPlayer.isStaminaEmpty && myPlayer.stamina >= MIN_STAMINA_TO_RUN) {
             myPlayer.isStaminaEmpty = false;
         }
     }
     
-    // Stamina UI'ı güncelle
+    // Update stamina UI
     updateStaminaUI();
 }
 
-// Dash ses efekti
-function playDashSound() {
-    // Basit bir dash ses efekti oluştur
-    try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+// Update stamina UI element
+function updateStaminaUI() {
+    // Create stamina bar if it doesn't exist
+    if (!staminaBar) {
+        staminaBar = document.createElement('div');
+        staminaBar.style.position = 'absolute';
+        staminaBar.style.bottom = '70px';
+        staminaBar.style.right = '20px';
+        staminaBar.style.width = '150px';
+        staminaBar.style.height = '15px';
+        staminaBar.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        staminaBar.style.border = '2px solid white';
+        staminaBar.style.borderRadius = '5px';
         
-        oscillator.type = 'sawtooth';
-        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.2);
+        const staminaFill = document.createElement('div');
+        staminaFill.id = 'stamina-fill';
+        staminaFill.style.height = '100%';
+        staminaFill.style.backgroundColor = 'yellow';
+        staminaFill.style.width = '100%';
+        staminaFill.style.borderRadius = '3px';
         
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        staminaBar.appendChild(staminaFill);
+        gameContainer.appendChild(staminaBar);
+    }
+    
+    // Update stamina bar fill
+    const staminaFill = document.getElementById('stamina-fill');
+    if (staminaFill) {
+        staminaFill.style.width = `${myPlayer.stamina}%`;
         
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.3);
-    } catch (error) {
-        console.log("Ses efekti oluşturulamadı");
+        // Change color based on stamina level
+        if (myPlayer.stamina > 60) {
+            staminaFill.style.backgroundColor = 'green';
+        } else if (myPlayer.stamina > 30) {
+            staminaFill.style.backgroundColor = 'yellow';
+        } else {
+            staminaFill.style.backgroundColor = 'red';
+        }
     }
 }
 
-// WebSocket bağlantısı kur
-connectWebSocket();
-    </script>
+// Character class setup
+function setupPlayerClass() {
+    myPlayer.characterClass = selectedCharacterType;
+    
+    // Set character-specific attributes
+    switch (myPlayer.characterClass) {
+        case 'runner':
+            myPlayer.speed = 180; // Faster speed
+            // Runner has longer stamina
+            break;
+            
+        case 'stealth':
+            myPlayer.speed = 140;
+            playerVisibilityMultiplier = 0.7; // Harder to see
+            // Stealth leaves fewer footprints
+            break;
+            
+        case 'defender':
+            myPlayer.speed = 130; // Slower but more defensive
+            // More resistant to being caught
+            break;
+            
+        case 'scout':
+            myPlayer.speed = 150;
+            // Can see further and detect footprints better
+            break;
+            
+        case 'trickster':
+            myPlayer.speed = 160;
+            // Can create false footprints and distractions
+            break;
+            
+        default:
+            myPlayer.speed = 150; // Default
+    }
+    
+    console.log(`Karakter sınıfı ayarlandı: ${myPlayer.characterClass}`);
+}
+
+// Dynamic maze setup
+function setupDynamicMaze() {
+    mazeManager = {
+        maze: maze,
+        hidingSpots: hidingSpots,
+        
+        // Dynamic maze features
+        trapDoors: [],
+        secretPassages: [],
+        movingWalls: [],
+        
+        // Add a trap door at specified location
+        addTrapDoor: function(x, y) {
+            this.trapDoors.push({
+                x: x * TILE_SIZE,
+                y: y * TILE_SIZE,
+                width: TILE_SIZE,
+                height: TILE_SIZE,
+                isOpen: false,
+                lastToggleTime: 0,
+                toggleInterval: 5000 + Math.random() * 5000
+            });
+        },
+        
+        // Update maze elements
+        update: function(deltaTime) {
+            // Update trap doors
+            const currentTime = Date.now();
+            this.trapDoors.forEach(door => {
+                if (currentTime - door.lastToggleTime > door.toggleInterval) {
+                    door.isOpen = !door.isOpen;
+                    door.lastToggleTime = currentTime;
+                    
+                    // Update maze data
+                    const tileX = Math.floor(door.x / TILE_SIZE);
+                    const tileY = Math.floor(door.y / TILE_SIZE);
+                    maze[tileY][tileX] = door.isOpen ? 0 : 1;
+                }
+            });
+            
+            // Update other dynamic maze elements
+            // ...
+        },
+        
+        // Draw dynamic maze elements
+        draw: function() {
+            // Draw trap doors
+            this.trapDoors.forEach(door => {
+                ctx.fillStyle = door.isOpen ? 'rgba(50, 50, 50, 0.5)' : '#444';
+                ctx.fillRect(door.x, door.y, door.width, door.height);
+                
+                // Draw indicator
+                ctx.strokeStyle = door.isOpen ? 'green' : 'red';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(door.x + 2, door.y + 2, door.width - 4, door.height - 4);
+            });
+            
+            // Draw other dynamic elements
+            // ...
+        }
+    };
+    
+    // Add some trap doors to the maze
+    mazeManager.addTrapDoor(5, 10);
+    mazeManager.addTrapDoor(15, 8);
+    mazeManager.addTrapDoor(10, 18);
+}
+
+// Power-up system
+function setupPowerUpSystem() {
+    powerUpManager = {
+        powerUps: [],
+        maxPowerUps: 3,
+        UI: null,
+        
+        // Available power-up types
+        powerUpTypes: [
+            {
+                name: 'Hız Artışı',
+                description: 'Hızını 10 saniye boyunca artırır',
+                duration: 10000,
+                onUse: function() {
+                    myPlayer.speed *= 1.5;
+                    setTimeout(() => {
+                        myPlayer.speed /= 1.5;
+                    }, this.duration);
+                }
+            },
+            {
+                name: 'Görünmezlik',
+                description: '5 saniye boyunca görünmez olursun',
+                duration: 5000,
+                onUse: function() {
+                    playerVisibilityMultiplier = 0.2;
+                    setTimeout(() => {
+                        playerVisibilityMultiplier = 1.0;
+                    }, this.duration);
+                }
+            },
+            {
+                name: 'İz Yanıltma',
+                description: 'Sahte ayak izleri oluşturur',
+                duration: 0,
+                onUse: function() {
+                    // Create fake footprints in random directions
+                    for (let i = 0; i < 20; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const distance = 50 + Math.random() * 100;
+                        const x = myPlayer.x + Math.cos(angle) * distance;
+                        const y = myPlayer.y + Math.sin(angle) * distance;
+                        
+                        // Check if position is valid (not in a wall)
+                        if (!checkWallCollision(x, y)) {
+                            const footprint = {
+                                x: x,
+                                y: y,
+                                angle: angle,
+                                size: 6,
+                                color: 'red',
+                                alpha: 1.0,
+                                creationTime: Date.now(),
+                                maxLifetime: FOOTPRINT_DURATION,
+                                isFromRunning: true
+                            };
+                            
+                            footprints.push(footprint);
+                        }
+                    }
+                }
+            }
+        ],
+        
+        // Initialize UI
+        createUI: function() {
+            this.UI = document.createElement('div');
+            this.UI.style.position = 'absolute';
+            this.UI.style.bottom = '20px';
+            this.UI.style.left = '50%';
+            this.UI.style.transform = 'translateX(-50%)';
+            this.UI.style.display = 'flex';
+            this.UI.style.gap = '15px';
+            gameContainer.appendChild(this.UI);
+            
+            this.updateUI();
+        },
+        
+        // Update UI with current power-ups
+        updateUI: function() {
+            if (!this.UI) this.createUI();
+            
+            this.UI.innerHTML = '';
+            
+            // Add power-up slots
+            for (let i = 0; i < this.maxPowerUps; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'powerup-slot';
+                slot.style.width = '50px';
+                slot.style.height = '50px';
+                slot.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                slot.style.border = '2px solid white';
+                slot.style.borderRadius = '10px';
+                slot.style.display = 'flex';
+                slot.style.justifyContent = 'center';
+                slot.style.alignItems = 'center';
+                slot.style.color = 'white';
+                slot.style.fontSize = '10px';
+                slot.style.textAlign = 'center';
+                
+                // Display power-up if available
+                if (i < this.powerUps.length) {
+                    const powerUp = this.powerUps[i];
+                    slot.textContent = powerUp.name;
+                    slot.title = powerUp.description;
+                    slot.style.backgroundColor = 'rgba(50, 50, 200, 0.7)';
+                    
+                    // Add key hint
+                    const keyHint = document.createElement('div');
+                    keyHint.style.position = 'absolute';
+                    keyHint.style.top = '-15px';
+                    keyHint.style.backgroundColor = 'black';
+                    keyHint.style.padding = '2px 5px';
+                    keyHint.style.borderRadius = '3px';
+                    keyHint.textContent = `${i + 1}`;
+                    slot.appendChild(keyHint);
+                    
+                    // Add click event
+                    slot.addEventListener('click', () => {
+                        this.usePowerUp(i);
+                    });
+                } else {
+                    slot.textContent = 'Boş';
+                }
+                
+                this.UI.appendChild(slot);
+            }
+        },
+        
+        // Add a random power-up
+        addRandomPowerUp: function() {
+            if (this.powerUps.length >= this.maxPowerUps) return;
+            
+            const randomType = Math.floor(Math.random() * this.powerUpTypes.length);
+            this.powerUps.push(this.powerUpTypes[randomType]);
+            
+            this.updateUI();
+            showStatusMessage("Yeni güç-up kazandın!", 2000);
+        },
+        
+        // Use a power-up at the given index
+        usePowerUp: function(index) {
+            if (index < 0 || index >= this.powerUps.length) return;
+            
+            const powerUp = this.powerUps[index];
+            powerUp.onUse();
+            
+            // Remove used power-up
+            this.powerUps.splice(index, 1);
+            this.updateUI();
+            
+            showStatusMessage(`${powerUp.name} kullanıldı!`, 2000);
+        }
+    };
+    
+    // Create power-up UI
+    powerUpManager.createUI();
+    
+    // Add a starting power-up based on character class
+    switch (myPlayer.characterClass) {
+        case 'runner':
+            powerUpManager.powerUps.push(powerUpManager.powerUpTypes[0]); // Speed boost
+            break;
+        case 'stealth':
+            powerUpManager.powerUps.push(powerUpManager.powerUpTypes[1]); // Invisibility
+            break;
+        case 'trickster':
+            powerUpManager.powerUps.push(powerUpManager.powerUpTypes[2]); // Fake footprints
+            break;
+        default:
+            // Random power-up for other classes
+            powerUpManager.addRandomPowerUp();
+    }
+    
+    powerUpManager.updateUI();
+}
+
+// Game mode implementation
+function startGameMode() {
+    switch (gameMode) {
+        case 'classic':
+            // Classic hide and seek - already implemented
+            showStatusMessage("Klasik Mod: Ebe oyuncuları yakalamalı!", 3000);
+            break;
+            
+        case 'infection':
+            // Infection mode - caught players become "it" too
+            showStatusMessage("Enfeksiyon Modu: Yakalanan oyuncular da ebe olur!", 3000);
+            break;
+            
+        case 'treasure':
+            // Treasure hunter mode - hide treasures around the map
+            setupTreasureMode();
+            showStatusMessage("Hazine Avcısı Modu: Hazineleri topla ve ebeden kaç!", 3000);
+            break;
+            
+        case 'timeAttack':
+            // Time attack - survive for a set time
+            setupTimeAttackMode();
+            showStatusMessage("Zamana Karşı Mod: 3 dakika hayatta kal!", 3000);
+            break;
+            
+        case 'teams':
+            // Team mode - players divided into teams
+            setupTeamMode();
+            showStatusMessage("Takım Modu: Takımını koru!", 3000);
+            break;
+    }
+}
+
+// Game enhancement utilities
+function shouldCreateFootprint() {
+    // Check for stealth character class or invisibility power-up
+    if (myPlayer.characterClass === 'stealth' && Math.random() < 0.5) {
+        return false;
+    }
+    
+    // Check for invisibility power-up active
+    if (playerVisibilityMultiplier < 0.5) {
+        return false;
+    }
+    
+    return true;
+}
+
+// Game enhancement integration
+function updatePlayerWithEnhancements(deltaTime) {
+    // Apply character-specific enhancements
+    
+    // Apply power-up effects
+    
+    // Apply maze effects
+    
+    // Update dynamic maze elements
+    if (mazeManager) {
+        mazeManager.update(deltaTime);
+    }
+}
+
+// Enhanced game loop with FPS counter and improvements
+function enhancedGameLoop(timestamp) {
+    // Calculate delta time for smooth movement
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Update game state based on current mode
+    if (gameState === 'playing') {
+        // Update player
+        updatePlayer(deltaTime);
+        
+        // Update footprints
+        updateFootprints();
+        
+        // Ebe yakalama kontrolü
+        if (isEbe) {
+            checkCatchPlayers();
+        }
+        
+        // Pozisyon güncellemesi gönder
+        sendPositionUpdate();
+    }
+    
+    // Draw game elements
+    if (gameState !== 'paused') {
+        // Labirenti çiz
+        drawMaze();
+        
+        // Dynamic maze elements
+        if (mazeManager) {
+            mazeManager.draw();
+        }
+        
+        // Engelleri çiz
+        drawObstacles();
+        
+        // Ayak izlerini çiz
+        drawFootprints();
+        
+        // Oyuncuları çiz
+        drawPlayers();
+        
+        // Görüş açısı maskesi
+        if (!isEbe) {
+            drawViewMask();
+        }
+        
+        // Game mode specific drawing
+        drawGameModeElements();
+        
+        // Draw FPS counter if enabled
+        if (showFps) {
+            const fps = Math.round(1000 / deltaTime);
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.fillText(`FPS: ${fps}`, 10, 20);
+        }
+    }
+    
+    // Continue game loop
+    requestAnimationFrame(enhancedGameLoop);
+}
+
+// Initialize game
+function init() {
+    // Connect to WebSocket server
+    connectWebSocket();
+    
+    // Event listeners for lobby buttons
+    createRoomBtn.addEventListener('click', () => {
+        createRoomPanel.style.display = 'block';
+    });
+    
+    createRoomSubmit.addEventListener('click', createRoom);
+    
+    createRoomCancel.addEventListener('click', () => {
+        createRoomPanel.style.display = 'none';
+    });
+    
+    refreshRoomsBtn.addEventListener('click', refreshRooms);
+    
+    leaveRoomBtn.addEventListener('click', leaveRoom);
+    
+    // Initialize blood elements for countdown effect
+    initBloodElements();
+    
+    // Show lobby initially
+    showLobby();
+}
+
+// Missing game mode elements function (referenced in enhancedGameLoop)
+function drawGameModeElements() {
+    // Draw game mode specific elements
+    if (gameMode === 'treasure') {
+        // Draw treasures
+        if (treasures) {
+            treasures.forEach(treasure => {
+                ctx.fillStyle = treasure.collected ? 'rgba(255, 215, 0, 0.3)' : 'gold';
+                ctx.beginPath();
+                ctx.arc(treasure.x, treasure.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw sparkle effect
+                if (!treasure.collected) {
+                    const time = Date.now() / 1000;
+                    const sparkleSize = 3 + Math.sin(time * 5) * 2;
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(treasure.x, treasure.y, sparkleSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+    } else if (gameMode === 'timeAttack') {
+        // Draw timer
+        if (timerInterval) {
+            // Convert gameTimer to minutes and seconds
+            const minutes = Math.floor(gameTimer / 60);
+            const seconds = gameTimer % 60;
+            
+            // Draw timer in top center
+            ctx.fillStyle = 'white';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, canvas.width / 2, 30);
+        }
+    } else if (gameMode === 'teams') {
+        // Draw team indicators and score
+    }
+}
+
+// Missing game mode setup functions
+function setupTreasureMode() {
+    // Create treasures array
+    window.treasures = [];
+    
+    // Create 10 treasures in random valid positions
+    for (let i = 0; i < 10; i++) {
+        let valid = false;
+        let x, y;
+        
+        // Find a valid position (not in a wall)
+        while (!valid) {
+            const tileX = Math.floor(Math.random() * maze[0].length);
+            const tileY = Math.floor(Math.random() * maze.length);
+            
+            if (maze[tileY][tileX] === 0) {
+                x = tileX * TILE_SIZE + TILE_SIZE / 2;
+                y = tileY * TILE_SIZE + TILE_SIZE / 2;
+                valid = true;
+            }
+        }
+        
+        // Add treasure
+        treasures.push({
+            x: x,
+            y: y,
+            collected: false
+        });
+    }
+    
+    // Add treasure collection check to player update
+    const originalUpdatePlayer = updatePlayer;
+    updatePlayer = function(deltaTime) {
+        originalUpdatePlayer(deltaTime);
+        
+        // Check for treasure collection
+        if (!isEbe && treasures) {
+            treasures.forEach(treasure => {
+                if (!treasure.collected && distance(myPlayer.x, myPlayer.y, treasure.x, treasure.y) < 20) {
+                    treasure.collected = true;
+                    showStatusMessage("Hazine toplandı!", 1000);
+                    
+                    // Give player a power-up
+                    if (powerUpManager) {
+                        powerUpManager.addRandomPowerUp();
+                    }
+                }
+            });
+        }
+    };
+}
+
+function setupTimeAttackMode() {
+    // Set game timer (3 minutes)
+    gameTimer = 180;
+    
+    // Start the timer
+    timerInterval = setInterval(() => {
+        if (gameState === 'playing') {
+            gameTimer--;
+            
+            // Time's up
+            if (gameTimer <= 0) {
+                clearInterval(timerInterval);
+                
+                // End the game
+                gameState = 'gameOver';
+                
+                // Show game over message
+                showStatusMessage("Zaman doldu! Oyun bitti!", 5000);
+                
+                // Schedule return to lobby
+                setTimeout(() => {
+                    leaveRoom();
+                }, 5000);
+            }
+        }
+    }, 1000);
+}
+
+function setupTeamMode() {
+    // Team data
+    window.teams = {
+        red: {
+            name: "Kırmızı Takım",
+            score: 0,
+            members: []
+        },
+        blue: {
+            name: "Mavi Takım",
+            score: 0,
+            members: []
+        }
+    };
+    
+    // Assign player to a team
+    const assignedTeam = Math.random() < 0.5 ? 'red' : 'blue';
+    teams[assignedTeam].members.push(clientId);
+    
+    // Send team assignment to server
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'team_assignment',
+            team: assignedTeam
+        }));
+    }
+    
+    // Show team assignment message
+    showStatusMessage(`${teams[assignedTeam].name}'a katıldın!`, 3000);
+}
+
+// Game enhancement initialization
+function initGameEnhancements() {
+    // Initialize camera
+    window.camera = setupCamera();
+    
+    // Create achievement system
+    window.achievementSystem = {
+        achievements: [
+            {
+                id: 'firstCatch',
+                name: 'İlk Yakalama',
+                description: 'İlk kez bir oyuncu yakala',
+                unlocked: false
+            },
+            {
+                id: 'speedster',
+                name: 'Hız Canavarı',
+                description: '30 saniye boyunca hiç durmadan koş',
+                unlocked: false,
+                progress: 0,
+                maxProgress: 30
+            },
+            {
+                id: 'ninja',
+                name: 'Ninja',
+                description: 'Hiç yakalanmadan 2 dakika geçir',
+                unlocked: false,
+                progress: 0,
+                maxProgress: 120
+            }
+        ],
+        
+        // Unlock an achievement
+        unlock: function(id) {
+            const achievement = this.achievements.find(a => a.id === id);
+            if (achievement && !achievement.unlocked) {
+                achievement.unlocked = true;
+                this.showNotification(achievement);
+            }
+        },
+        
+        // Update achievement progress
+        updateProgress: function(id, value) {
+            const achievement = this.achievements.find(a => a.id === id);
+            if (achievement && !achievement.unlocked) {
+                achievement.progress = Math.min(achievement.maxProgress, value);
+                
+                // Check if completed
+                if (achievement.progress >= achievement.maxProgress) {
+                    this.unlock(id);
+                }
+            }
+        },
+        
+        // Show notification
+        showNotification: function(achievement) {
+            const notification = document.createElement('div');
+            notification.className = 'achievement-notification';
+            notification.innerHTML = `
+                <div>🏆</div>
+                <div>
+                    <strong>${achievement.name}</strong>
+                    <div>${achievement.description}</div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Remove after animation
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+    };
+    
+    // Initialize particle system
+    window.particleSystem = {
+        particles: [],
+        
+        createParticle: function(x, y, color, lifetime = 1000, size = 5, velocity = {x: 0, y: 0}) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            particle.style.backgroundColor = color;
+            particle.style.left = `${x}px`;
+            particle.style.top = `${y}px`;
+            particle.style.borderRadius = '50%';
+            
+            document.body.appendChild(particle);
+            
+            const particleData = {
+                element: particle,
+                x: x,
+                y: y,
+                velocity: velocity,
+                lifetime: lifetime,
+                creationTime: Date.now()
+            };
+            
+            this.particles.push(particleData);
+            
+            // Remove after lifetime
+            setTimeout(() => {
+                this.removeParticle(particleData);
+            }, lifetime);
+            
+            return particleData;
+        },
+        
+        removeParticle: function(particle) {
+            if (particle.element.parentNode) {
+                particle.element.remove();
+            }
+            
+            const index = this.particles.indexOf(particle);
+            if (index !== -1) {
+                this.particles.splice(index, 1);
+            }
+        },
+        
+        update: function() {
+            this.particles.forEach(particle => {
+                // Update position
+                particle.x += particle.velocity.x;
+                particle.y += particle.velocity.y;
+                
+                // Update element
+                particle.element.style.left = `${particle.x}px`;
+                particle.element.style.top = `${particle.y}px`;
+                
+                // Calculate age ratio
+                const age = Date.now() - particle.creationTime;
+                const ageRatio = age / particle.lifetime;
+                
+                // Fade out
+                particle.element.style.opacity = 1 - ageRatio;
+            });
+        }
+    };
+    
+    // Update player render for team mode
+    if (gameMode === 'teams') {
+        const originalDrawPlayers = drawPlayers;
+        drawPlayers = function() {
+            // Call original function
+            originalDrawPlayers();
+            
+            // Add team indicators
+            if (teams) {
+                // Draw team indicators
+            }
+        };
+    }
+}
+
+// Start initialization on page load
+window.addEventListener('DOMContentLoaded', init);
+</script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
