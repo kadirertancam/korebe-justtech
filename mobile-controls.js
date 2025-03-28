@@ -1,194 +1,320 @@
-// Mobil Kontrol Mekanizması
+// mobile-controls.js - Fixed version
 
 class MobileControlManager {
-    constructor(canvas, gameState) {
-        this.canvas = canvas;
-        this.gameState = gameState;
-        this.joystickContainer = document.getElementById('mobile-joystick-container');
-        this.joystick = document.getElementById('mobile-joystick');
-        this.actionTagButton = document.getElementById('action-tag');
-        this.actionSpecialButton = document.getElementById('action-special');
+    constructor() {
+        this.isMobile = this.detectMobile();
+        this.joystickSize = 120;
+        this.joystickInnerSize = 50;
+        this.buttonSize = 80;
+        this.joystick = null;
+        this.joystickInner = null;
+        this.runButton = null;
+        this.actionButton = null;
+        this.joystickActive = false;
+        this.joystickTouchId = null;
+        this.joystickStartX = 0;
+        this.joystickStartY = 0;
+        this.joystickMaxDistance = this.joystickSize / 3;
         
-        this.joystickData = {
-            active: false,
-            centerX: 0,
-            centerY: 0,
-            currentX: 0,
-            currentY: 0,
-            radius: 60
-        };
-        
-        this.setupEventListeners();
-        this.disablePCControls();
+        // Initialize if mobile
+        if (this.isMobile) {
+            this.setupMobileControls();
+            this.disablePCControls();
+        }
     }
     
-    // PC kontrol tuşlarını devre dışı bırak
+    detectMobile() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+               (window.innerWidth <= 800);
+    }
+    
     disablePCControls() {
-        // Klavye event listener'larını devre dışı bırak
-        window.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('keyup', handleKeyUp);
+        // Define handleKeyDown function to fix the error
+        window.handleKeyDown = function(e) {
+            // No-op function to prevent errors
+            console.log("Key event intercepted and ignored");
+        };
         
-        // Gerekirse tüm klavye kontrol değişkenlerini sıfırla
-        if (typeof keys !== 'undefined') {
-            keys.w = false;
-            keys.a = false;
-            keys.s = false;
-            keys.d = false;
-            keys.shift = false;
+        // Disable keyboard controls by removing existing event listeners
+        window.removeEventListener('keydown', window.handleKeyDown);
+        
+        // Hide desktop instructions
+        const instructions = document.querySelector('.instructions');
+        if (instructions) {
+            instructions.style.display = 'none';
         }
+    }
+    
+    setupMobileControls() {
+        // Create joystick container
+        this.joystick = document.createElement('div');
+        this.joystick.id = 'joystick-container';
+        this.joystick.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            left: 50px;
+            width: ${this.joystickSize}px;
+            height: ${this.joystickSize}px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            z-index: 1000;
+            touch-action: none;
+        `;
+        
+        // Create joystick inner
+        this.joystickInner = document.createElement('div');
+        this.joystickInner.id = 'joystick-inner';
+        this.joystickInner.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: ${this.joystickInnerSize}px;
+            height: ${this.joystickInnerSize}px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            z-index: 1001;
+        `;
+        
+        this.joystick.appendChild(this.joystickInner);
+        document.body.appendChild(this.joystick);
+        
+        // Create run button
+        this.runButton = document.createElement('div');
+        this.runButton.id = 'run-button';
+        this.runButton.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 50px;
+            width: ${this.buttonSize}px;
+            height: ${this.buttonSize}px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            touch-action: none;
+        `;
+        this.runButton.textContent = 'RUN';
+        document.body.appendChild(this.runButton);
+        
+        // Create action button
+        this.actionButton = document.createElement('div');
+        this.actionButton.id = 'action-button';
+        this.actionButton.style.cssText = `
+            position: fixed;
+            bottom: 200px;
+            right: 50px;
+            width: ${this.buttonSize}px;
+            height: ${this.buttonSize}px;
+            background-color: rgba(100, 255, 100, 0.3);
+            border-radius: 50%;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            touch-action: none;
+        `;
+        this.actionButton.textContent = 'ACTION';
+        document.body.appendChild(this.actionButton);
+        
+        // Setup event listeners
+        this.setupEventListeners();
     }
     
     setupEventListeners() {
-        // Dokunma başlangıcı
-        this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+        // Joystick events
+        this.joystick.addEventListener('touchstart', this.handleJoystickStart.bind(this));
+        document.addEventListener('touchmove', this.handleJoystickMove.bind(this));
+        document.addEventListener('touchend', this.handleJoystickEnd.bind(this));
+        document.addEventListener('touchcancel', this.handleJoystickEnd.bind(this));
         
-        // Dokunma hareketi
-        this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+        // Run button events
+        this.runButton.addEventListener('touchstart', this.handleRunStart.bind(this));
+        this.runButton.addEventListener('touchend', this.handleRunEnd.bind(this));
+        this.runButton.addEventListener('touchcancel', this.handleRunEnd.bind(this));
         
-        // Dokunma bitişi
-        this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
-        
-        // Mobil buton olayları
-        this.actionTagButton.addEventListener('touchstart', this.handleTagAction.bind(this));
-        this.actionSpecialButton.addEventListener('touchstart', this.handleSpecialAction.bind(this));
+        // Action button events
+        this.actionButton.addEventListener('touchstart', this.handleActionPress.bind(this));
     }
     
-    handleTouchStart(event) {
-        event.preventDefault();
-        const touch = event.touches[0];
+    handleJoystickStart(e) {
+        if (this.joystickActive) return;
         
-        // Joystick kontrolü
-        const joystickRect = this.joystickContainer.getBoundingClientRect();
-        if (
-            touch.clientX >= joystickRect.left && 
-            touch.clientX <= joystickRect.right && 
-            touch.clientY >= joystickRect.top && 
-            touch.clientY <= joystickRect.bottom
-        ) {
-            this.joystickData.active = true;
-            this.joystickData.centerX = joystickRect.left + joystickRect.width / 2;
-            this.joystickData.centerY = joystickRect.top + joystickRect.height / 2;
-        } else {
-            // Joystick alanı dışında fare/dokunma koordinatlarını güncelle
-            mouseX = touch.clientX;
-            mouseY = touch.clientY;
-        }
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.joystickActive = true;
+        this.joystickTouchId = touch.identifier;
+        
+        const joystickRect = this.joystick.getBoundingClientRect();
+        this.joystickStartX = joystickRect.left + joystickRect.width / 2;
+        this.joystickStartY = joystickRect.top + joystickRect.height / 2;
+        
+        this.updateJoystickPosition(touch.clientX, touch.clientY);
     }
     
-    handleTouchMove(event) {
-        event.preventDefault();
-        const touch = event.touches[0];
+    handleJoystickMove(e) {
+        if (!this.joystickActive) return;
         
-        // Joystick hareketini kontrol et
-        if (this.joystickData.active) {
-            const dx = touch.clientX - this.joystickData.centerX;
-            const dy = touch.clientY - this.joystickData.centerY;
-            
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const maxDistance = this.joystickData.radius;
-            
-            // Joystick sınırları içinde hareket
-            if (distance <= maxDistance) {
-                this.joystick.style.transform = `translate(${dx}px, ${dy}px)`;
-                
-                // Hareket yönünü hesapla
-                const moveX = dx / maxDistance;
-                const moveY = dy / maxDistance;
-                
-                // Oyuncu hareketini güncelle
-                this.updatePlayerMovement(moveX, moveY);
-            } else {
-                // Maksimum sınırda sabit kal
-                const angle = Math.atan2(dy, dx);
-                const limitedX = Math.cos(angle) * maxDistance;
-                const limitedY = Math.sin(angle) * maxDistance;
-                
-                this.joystick.style.transform = `translate(${limitedX}px, ${limitedY}px)`;
-                
-                const moveX = limitedX / maxDistance;
-                const moveY = limitedY / maxDistance;
-                
-                this.updatePlayerMovement(moveX, moveY);
+        e.preventDefault();
+        
+        // Find the right touch
+        for (let i = 0; i < e.touches.length; i++) {
+            if (e.touches[i].identifier === this.joystickTouchId) {
+                this.updateJoystickPosition(e.touches[i].clientX, e.touches[i].clientY);
+                break;
             }
-            
-            // Fare koordinatlarını da güncelle (bakış açısı için)
-            mouseX = touch.clientX;
-            mouseY = touch.clientY;
-        } else {
-            // Joystick dışında fare koordinatlarını güncelle
-            mouseX = touch.clientX;
-            mouseY = touch.clientY;
         }
     }
     
-    handleTouchEnd(event) {
-        event.preventDefault();
+    updateJoystickPosition(touchX, touchY) {
+        // Calculate displacement from center
+        let deltaX = touchX - this.joystickStartX;
+        let deltaY = touchY - this.joystickStartY;
         
-        // Joystick konumunu sıfırla
-        if (this.joystickData.active) {
-            this.joystickData.active = false;
-            this.joystick.style.transform = 'translate(-50%, -50%)';
+        // Calculate distance
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        // Limit to max distance
+        if (distance > this.joystickMaxDistance) {
+            deltaX = (deltaX / distance) * this.joystickMaxDistance;
+            deltaY = (deltaY / distance) * this.joystickMaxDistance;
+        }
+        
+        // Update joystick position
+        this.joystickInner.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+        
+        // Update game controls
+        if (window.keys) {
+            window.keys.w = deltaY < -10;
+            window.keys.s = deltaY > 10;
+            window.keys.a = deltaX < -10;
+            window.keys.d = deltaX > 10;
+        }
+    }
+    
+    handleJoystickEnd(e) {
+        // Check if our touch ended
+        let touchFound = false;
+        for (let i = 0; i < e.touches.length; i++) {
+            if (e.touches[i].identifier === this.joystickTouchId) {
+                touchFound = true;
+                break;
+            }
+        }
+        
+        if (!touchFound) {
+            this.joystickActive = false;
+            this.joystickTouchId = null;
             
-            // Hareket kontrollerini sıfırla
-            this.updatePlayerMovement(0, 0);
-        }
-    }
-    
-    updatePlayerMovement(x, y) {
-        // Oyuncu hareket kontrollerini güncelle
-        if (typeof keys !== 'undefined') {
-            keys.w = y < -0.5;
-            keys.s = y > 0.5;
-            keys.a = x < -0.5;
-            keys.d = x > 0.5;
+            // Reset joystick position
+            this.joystickInner.style.transform = 'translate(-50%, -50%)';
             
-            // Koşma kontrolü
-            keys.shift = Math.abs(x) > 0.8 || Math.abs(y) > 0.8;
+            // Reset game controls
+            if (window.keys) {
+                window.keys.w = false;
+                window.keys.a = false;
+                window.keys.s = false;
+                window.keys.d = false;
+            }
         }
     }
     
-    handleTagAction() {
-        // Ebeleme aksiyonu
-        if (this.gameState.isEbe && typeof checkCatchPlayers === 'function') {
-            checkCatchPlayers();
+    handleRunStart(e) {
+        e.preventDefault();
+        
+        // Update visual state
+        this.runButton.style.backgroundColor = 'rgba(255, 100, 100, 0.5)';
+        
+        // Update game controls
+        if (window.keys) {
+            window.keys.shift = true;
         }
     }
     
-    handleSpecialAction() {
-        // Karakter sınıfına özel yetenek
-        if (typeof powerUpManager !== 'undefined') {
-            powerUpManager.activatePowerUp(0); // İlk güç-up'ı kullan
+    handleRunEnd(e) {
+        // Update visual state
+        this.runButton.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+        
+        // Update game controls
+        if (window.keys) {
+            window.keys.shift = false;
         }
     }
     
-    // Mobil cihaz kontrollerini etkinleştir
-    enableMobileControls() {
-        this.joystickContainer.style.display = 'block';
-        this.actionTagButton.style.display = 'block';
-        this.actionSpecialButton.style.display = 'block';
-    }
-    
-    // Mobil cihaz kontrollerini devre dışı bırak
-    disableMobileControls() {
-        this.joystickContainer.style.display = 'none';
-        this.actionTagButton.style.display = 'none';
-        this.actionSpecialButton.style.display = 'none';
+    handleActionPress(e) {
+        e.preventDefault();
+        
+        // Visual feedback
+        this.actionButton.style.backgroundColor = 'rgba(100, 255, 100, 0.5)';
+        setTimeout(() => {
+            this.actionButton.style.backgroundColor = 'rgba(100, 255, 100, 0.3)';
+        }, 100);
+        
+        // Game action - either tag if player is "it" or use power-up
+        if (window.isEbe && window.checkCatchPlayers) {
+            window.checkCatchPlayers();
+        } else if (window.powerUpManager && 
+                  window.powerUpManager.inventory && 
+                  window.powerUpManager.inventory.length > 0) {
+            window.powerUpManager.activatePowerUp(0);
+        }
     }
 }
 
-// Mobil cihaz kontrolü
+// Initialize mobile controls
 function initMobileControls() {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Create global control manager instance
+    window.mobileControlManager = new MobileControlManager();
     
-    if (isMobile) {
-        const mobileControlManager = new MobileControlManager(canvas, {
-            isEbe: isEbe
-        });
+    // Add additional mobile-specific tweaks
+    if (window.mobileControlManager.isMobile) {
+        // Adjust UI elements for mobile
+        const gameUI = document.getElementById('game-ui');
+        if (gameUI) {
+            gameUI.style.top = '10px';
+            gameUI.style.right = '10px';
+            gameUI.style.fontSize = '14px';
+        }
         
-        // Oyun başladığında mobil kontrolleri etkinleştir
-        mobileControlManager.enableMobileControls();
+        const playerList = document.getElementById('player-list');
+        if (playerList) {
+            playerList.style.maxWidth = '120px';
+            playerList.style.fontSize = '12px';
+        }
+        
+        // Ensure viewport is properly set
+        let viewport = document.querySelector('meta[name="viewport"]');
+        if (!viewport) {
+            viewport = document.createElement('meta');
+            viewport.name = 'viewport';
+            document.head.appendChild(viewport);
+        }
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        
+        // Prevent scrolling/zooming
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
     }
 }
 
-// Sayfa yüklendiğinde mobil kontrolleri başlat
+// Initialize when document is loaded
 document.addEventListener('DOMContentLoaded', initMobileControls);
+
+// Also initialize when game starts
+if (window.startGame) {
+    const originalStartGame = window.startGame;
+    window.startGame = function() {
+        originalStartGame.apply(this, arguments);
+        initMobileControls();
+    };
+}

@@ -826,7 +826,13 @@ const originalStartGame = startGame;
 startGame = function() {
     // Önce orijinal fonksiyonu çağır
     originalStartGame();
-    
+    if (typeof window.startGame === 'function') {
+    const originalStartGame = window.startGame;
+    window.startGame = function() {
+        originalStartGame.apply(this, arguments);
+        initGameFixes();
+    };
+}
     // Sonra geliştirilmiş sistemleri başlat
     if (typeof initGameEnhancements === 'function') {
         console.log("Oyun geliştirmeleri başlatılıyor...");
@@ -1232,7 +1238,6 @@ function connectWebSocket() {
                             players[player.id] = player;
                         }
                     });
-                    initMobileControls()
                     // Oyuna başla
                     startGame();
                     updatePlayerList();
@@ -1754,8 +1759,7 @@ function drawMaze() {
 
 // Kamera takibini etkinleştir
 function setupCamera() {
-    // Daha önce oluşturulmuş bir kamera objesi
-    const camera = {
+    camera = {
         x: 0,
         y: 0,
         width: window.innerWidth,
@@ -1779,6 +1783,10 @@ function setupCamera() {
             ctx.restore();
         }
     };
+    
+    // Canvas size should match window size for proper display
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
     
     return camera;
 }
@@ -2804,7 +2812,221 @@ function updatePlayerWithEnhancements(deltaTime) {
         mazeManager.update(deltaTime);
     }
 }
+function ensureGameObjects() {
+    // Make sure the keys object exists
+    if (typeof window.keys === 'undefined') {
+        window.keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false,
+            shift: false
+        };
+    }
+    
+    // Make sure checkCatchPlayers exists even if not defined yet
+    if (typeof window.checkCatchPlayers === 'undefined') {
+        window.checkCatchPlayers = function() {
+            console.log("checkCatchPlayers called but not yet defined");
+        };
+    }
+    
+    // Make sure isEbe exists
+    if (typeof window.isEbe === 'undefined') {
+        window.isEbe = false;
+    }
+    
+    // Make sure powerUpManager exists with a basic structure
+    if (typeof window.powerUpManager === 'undefined') {
+        window.powerUpManager = {
+            inventory: [],
+            activatePowerUp: function(index) {
+                console.log("activatePowerUp called but powerUpManager not fully initialized");
+            }
+        };
+    }
+}
 
+
+function initCameraSystem() {
+    try {
+        // Ensure canvas exists
+        const canvas = document.getElementById('gameCanvas');
+        if (!canvas) {
+            console.error("Game canvas not found");
+            return null;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Create camera object
+        window.camera = {
+            x: 0,
+            y: 0,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            follow: function(target) {
+                if (!target) return;
+                
+                // Follow target keeping it centered
+                this.x = target.x - this.width / 2;
+                this.y = target.y - this.height / 2;
+                
+                // Check canvas boundaries if they exist
+                if (canvas) {
+                    this.x = Math.max(0, Math.min(this.x, canvas.width - this.width));
+                    this.y = Math.max(0, Math.min(this.y, canvas.height - this.height));
+                }
+            },
+            apply: function() {
+                // Apply camera transformation
+                if (ctx) {
+                    ctx.save();
+                    ctx.translate(-this.x, -this.y);
+                }
+            },
+            restore: function() {
+                // Restore previous transformation
+                if (ctx) {
+                    ctx.restore();
+                }
+            }
+        };
+        
+        // Update canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Handle window resizing
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            if (window.camera) {
+                window.camera.width = window.innerWidth;
+                window.camera.height = window.innerHeight;
+            }
+        });
+        
+        console.log("Camera system initialized successfully");
+        return window.camera;
+    } catch (error) {
+        console.error("Error initializing camera system:", error);
+        return null;
+    }
+}
+
+function enhanceGameLoop() {
+    if (typeof window.gameLoop !== 'function') {
+        console.warn("Original gameLoop function not found");
+        return;
+    }
+    
+    // Store the original gameLoop
+    const originalGameLoop = window.gameLoop;
+    
+    // Replace with enhanced version
+    window.gameLoop = function(timestamp) {
+        // Make sure required objects exist
+        ensureGameObjects();
+        
+        // Calculate delta time
+        const deltaTime = timestamp - (window.lastTime || 0);
+        window.lastTime = timestamp;
+        
+        // Update player position and game state (original code)
+        if (typeof window.updatePlayer === 'function') {
+            window.updatePlayer(deltaTime);
+        }
+        
+        if (typeof window.updateFootprints === 'function') {
+            window.updateFootprints();
+        }
+        
+        // Check for player catching (if player is "it")
+        if (window.isEbe && typeof window.checkCatchPlayers === 'function') {
+            window.checkCatchPlayers();
+        }
+        
+        // If we have camera, use it
+        if (window.camera && window.myPlayer) {
+            window.camera.follow(window.myPlayer);
+        }
+        
+        // Clear canvas
+        const canvas = document.getElementById('gameCanvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Apply camera if available
+            if (window.camera) {
+                window.camera.apply();
+            }
+            
+            // Draw all game elements
+            if (typeof window.drawMaze === 'function') {
+                window.drawMaze();
+            }
+            
+            if (typeof window.drawFootprints === 'function') {
+                window.drawFootprints();
+            }
+            
+            if (typeof window.drawPlayers === 'function') {
+                window.drawPlayers();
+            }
+            
+            // Any additional draw functions
+            
+            // Restore camera if it was applied
+            if (window.camera) {
+                window.camera.restore();
+            }
+        }
+        
+        // Continue game loop
+        requestAnimationFrame(window.gameLoop);
+    };
+    
+    console.log("Game loop enhanced with camera support");
+}
+function initGameFixes() {
+    console.log("Initializing game fixes...");
+    
+    // Ensure all game objects exist
+    ensureGameObjects();
+    
+    // Initialize camera system
+    initCameraSystem();
+    
+    // Fix mouse position for camera
+    fixMousePosition();
+    
+    // Enhance game loop with camera support
+    enhanceGameLoop();
+    
+    console.log("Game fixes initialized");
+}
+window.addEventListener('load', initGameFixes);
+function fixMousePosition() {
+    const canvas = document.getElementById('gameCanvas');
+    if (!canvas) return;
+    
+    // Remove any existing mousemove listeners to prevent duplicates
+    const newMouseMove = function(e) {
+        if (window.camera) {
+            window.mouseX = e.clientX + window.camera.x;
+            window.mouseY = e.clientY + window.camera.y;
+        } else {
+            window.mouseX = e.clientX;
+            window.mouseY = e.clientY;
+        }
+    };
+    
+    // Add our improved event listener
+    canvas.addEventListener('mousemove', newMouseMove);
+}
 // Enhanced game loop with FPS counter and improvements
 function enhancedGameLoop(timestamp) {
     // Calculate delta time for smooth movement
@@ -2818,7 +3040,15 @@ function enhancedGameLoop(timestamp) {
     if (gameState === 'playing') {
         // Update player
         updatePlayer(deltaTime);
-        
+        if (!camera) {
+        camera = setupCamera();
+    }
+    camera.follow(myPlayer);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    initMobileControls();
+
+    // Apply camera transformation before drawing anything
+    camera.apply();
         // Update footprints
         updateFootprints();
         
